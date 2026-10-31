@@ -19,7 +19,7 @@ This is an MVP built with React Native + Expo (SDK 58), with audio handled by [R
   - The pattern is drawn in drum notation with R/L sticking. Each note is coloured by how it landed (on time, rushed or dragged) and labelled with its average offset.
   - **Your playing on the grid:** the recording's waveform is drawn over the bar, beat and subdivision lines, under the notes you were meant to play. Each note links to where you actually played it, coloured by how it landed. Zoom in on single strokes or out to the whole test.
   - A per-hit timeline shows each note's offset against the pocket band.
-- **Pocket width setting** (±10–50 ms, default ±20 ms). You can change it in Settings or live on the detailed view; the score is recalculated as you drag.
+- **Pocket width setting** (±10–50 ms in 5 ms steps, default ±30 ms). You can change it in Settings or live on the detailed view; the score is recalculated as you drag.
 - **Progress.** Shows your average score with the change versus the previous 7 days, total tests, best score, time practised, and recent sessions. Tap a session to open its detailed view.
 - **Library.** Has 10 rudiments, fills and grooves (Single Stroke, Paradiddle, Double Stroke, Flam Accent, Moeller, Bossa Nova and more). You can search, filter, and preview the pattern before you play it.
 - **Freemium.**

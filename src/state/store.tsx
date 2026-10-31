@@ -89,12 +89,12 @@ interface Usage {
   tests: number;
 }
 
-const DEFAULT_SETTINGS: Settings = {
-  pocketMs: 20,
+export const DEFAULT_SETTINGS: Settings = {
+  pocketMs: 30,
   clickVolume: 0.7,
-  defaultTempo: 120,
+  defaultTempo: 100,
   durationSec: 10,
-  haptics: true,
+  haptics: false,
   inputMode: 'mic',
   sensitivity: 'medium',
   micInput: MIC_BUILTIN,
@@ -127,6 +127,8 @@ interface Store {
   testsToday: number;
   testsLeft: number;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** Back to DEFAULT_SETTINGS, keeping latency calibrations (they're measurements of this device, not preferences). */
+  resetSettings: () => void;
   updateProfile: (patch: Partial<Profile>) => void;
   setCurrent: (r: SessionResult | null) => void;
   updateCurrent: (patch: Partial<SessionResult>) => void;
@@ -193,6 +195,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  const resetSettings = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...DEFAULT_SETTINGS, latency: prev.latency };
+      write(KEYS.settings, next);
+      return next;
+    });
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...patch };
@@ -253,6 +263,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       testsToday,
       testsLeft: profile.premium ? Infinity : Math.max(0, FREE_TESTS_PER_DAY - testsToday),
       updateSettings,
+      resetSettings,
       updateProfile,
       setCurrent,
       updateCurrent,
@@ -260,7 +271,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       recordTestUsed,
       clearSessions,
     }),
-    [ready, settings, profile, sessions, current, testsToday, updateSettings, updateProfile, updateCurrent, saveCurrent, recordTestUsed, clearSessions],
+    [ready, settings, profile, sessions, current, testsToday, updateSettings, resetSettings, updateProfile, updateCurrent, saveCurrent, recordTestUsed, clearSessions],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

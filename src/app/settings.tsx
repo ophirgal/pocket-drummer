@@ -4,18 +4,31 @@ import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { canChooseMic, useAudioDevices, type Mic } from '@/audio/devices';
 import { Body, Button, Card, Header, LinkRow, Screen, SliderRow, Tabs, ToggleRow } from '@/components/ui';
 import { colors, space } from '@/lib/theme';
-import { MIC_BUILTIN, useStore, type InputMode, type Sensitivity } from '@/state/store';
+import { DEFAULT_SETTINGS, MIC_BUILTIN, useStore, type InputMode, type Sensitivity } from '@/state/store';
 
 /**
  * App settings: pocket width, click volume, default tempo, input mode (mic or
  * tap), mic sensitivity, which microphone records, haptics, a link to latency
- * calibration for the current audio output, and clearing the saved history. Every change is persisted immediately through the store.
+ * calibration for the current audio output, resetting everything to the
+ * defaults, and clearing the saved history. Every change is persisted immediately through the store.
  */
 export default function Settings() {
-  const { settings, updateSettings, clearSessions } = useStore();
+  const { settings, updateSettings, resetSettings, clearSessions } = useStore();
   const { mics, route } = useAudioDevices();
   const latency = route ? settings.latency[settings.inputMode][route.key] : undefined;
   const autoLatency = settings.inputMode === 'mic' && route !== null && !route.headphones;
+
+  const confirmReset = () => {
+    const msg = 'Put every setting back to its default? Your latency calibrations are kept.';
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) resetSettings();
+      return;
+    }
+    Alert.alert('Reset to defaults?', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', style: 'destructive', onPress: resetSettings },
+    ]);
+  };
 
   const confirmClear = () => {
     if (Platform.OS === 'web') {
@@ -43,7 +56,7 @@ export default function Settings() {
           ticks={['10 ms', '20 ms', '30 ms', '40 ms', '50 ms']}
           onChange={(v) => updateSettings({ pocketMs: Math.round(v / 5) * 5 })}
         />
-        <Body>This defines how close to the beat your hits need to be to be considered “in the pocket”. The default is ±20 ms.</Body>
+        <Body>This defines how close to the beat your hits need to be to be considered “in the pocket”. The default is ±{DEFAULT_SETTINGS.pocketMs} ms.</Body>
       </Card>
 
       <Card>
@@ -115,6 +128,7 @@ export default function Settings() {
         <ToggleRow label="Haptic Feedback" value={settings.haptics} onChange={(v) => updateSettings({ haptics: v })} />
       </Card>
 
+      <Button title="Reset to Defaults" variant="secondary" onPress={confirmReset} />
       <Button title="Clear practice history" variant="secondary" onPress={confirmClear} />
     </Screen>
   );
@@ -125,7 +139,8 @@ const PHONE_MIC: Mic = { id: MIC_BUILTIN, name: "Phone's microphone", kind: 'bui
 /**
  * Which microphone records the test. The phone's own mic is the default and the
  * recommended choice: with headphones on, it hears the pad but not the click.
- * On Android the system decides, so this explains what it will use instead.
+ * On Android the system decides, and on the web the browser does, so this
+ * explains what will be used instead.
  */
 function MicPicker({
   mics,
@@ -138,6 +153,9 @@ function MicPicker({
   savedName?: string;
   onChange: (m: Mic) => void;
 }) {
+  if (Platform.OS === 'web') {
+    return <Body>The browser&apos;s default microphone is used. You can pick a different one in your browser&apos;s site settings.</Body>;
+  }
   if (!canChooseMic) {
     const headset = mics.some((m) => m.kind === 'headset');
     return (
