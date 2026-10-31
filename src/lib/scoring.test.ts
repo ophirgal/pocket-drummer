@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ClockSync } from './clockSync';
 import { EXERCISES } from './exercises';
-import { EnvelopeBuilder, LiveOnsets, detectOnsets } from './onset';
+import { EnvelopeBuilder, LiveOnsets, detectOnsets, mergeCloseOnsets } from './onset';
 import { decodeRecording, encodeRecording, levelBetween } from './recording';
-import { COUNT_IN_BEATS, scoreTest, type TakenTest } from './scoring';
+import { COUNT_IN_BEATS, scoreTest, strokeGapMs, type TakenTest } from './scoring';
 
 const SR = 48000;
 const single = EXERCISES.find((e) => e.id === 'single-stroke-roll')!;
@@ -50,15 +50,13 @@ test('live detection while audio streams in finds the same hits as the final pas
   const audio = render([200, 450, 700, 760, 1100, 1350].map((at) => ({ at, level: 0.5 })), 1600);
   const b = new EnvelopeBuilder(SR, 2);
   const live = new LiveOnsets(b.hopMs);
-  const found: number[] = [];
+  const found: { index: number; peak: number }[] = [];
   for (let i = 0; i < audio.length; i += 480) {
     b.push(audio.subarray(i, i + 480), i);
     found.push(...live.scan(b.envelope, 0.1));
   }
-  assert.deepEqual(
-    found,
-    detectOnsets(b.envelope, b.hopMs, { threshold: 0.1 }).map((o) => o.index),
-  );
+  // Same hits, and the same peaks (each reported once its peak window has arrived).
+  assert.deepEqual(found, detectOnsets(b.envelope, b.hopMs, { threshold: 0.1 }));
   assert.equal(found.length, 6);
 });
 
@@ -92,7 +90,14 @@ test('recordings survive encoding', () => {
  * `streamStart`, the first count-in click is at `t0`, and the player's strokes
  * land at `offsets` from each note.
  */
-function takeTest(opts: { offsets: number[]; inputLatency: number; bleedLag?: number; calibrated: number | null }): TakenTest {
+function takeTest(opts: {
+  offsets: number[];
+  inputLatency: number;
+  bleedLag?: number;
+  calibrated: number | null;
+  /** A weaker second bump after every stroke, like a stick rebounding on the pad. */
+  rebound?: { afterMs: number; level: number };
+}): TakenTest {
   const bpm = 120;
   const beatMs = 500;
   const streamStart = 1000;
@@ -101,7 +106,11 @@ function takeTest(opts: { offsets: number[]; inputLatency: number; bleedLag?: nu
   const scoredStart = t0 + COUNT_IN_BEATS * beatMs;
   const stepMs = beatMs / single.stepsPerBeat;
   const sounds: { at: number; level: number }[] = [];
-  opts.offsets.forEach((off, i) => sounds.push({ at: scoredStart + i * stepMs + off + opts.inputLatency - streamStart, level: 0.6 }));
+  opts.offsets.forEach((off, i) => {
+    const at = scoredStart + i * stepMs + off + opts.inputLatency - streamStart;
+    sounds.push({ at, level: 0.6 });
+    if (opts.rebound) sounds.push({ at: at + opts.rebound.afterMs, level: opts.rebound.level });
+  });
   if (opts.bleedLag !== undefined) {
     // Through a speaker, the mic also hears every click.
     for (let k = 0; k < COUNT_IN_BEATS + bars * 4; k++) sounds.push({ at: t0 + k * beatMs + opts.bleedLag - streamStart, level: 0.12 });
@@ -146,6 +155,27 @@ test('speaker: the click echo in the count-in measures latency automatically', (
     const tolerance = i % single.stepsPerBeat === 0 ? 8 : 2;
     assert.ok(o !== null && Math.abs(o - PLAYED[i]) <= tolerance, `note ${i}: ${o} vs ${PLAYED[i]}`);
   });
+});
+
+test('a stroke and its rebound count as one hit', () => {
+  const r = scoreTest(takeTest({ offsets: PLAYED, inputLatency: 0, calibrated: 0, rebound: { afterMs: 60, level: 0.18 } }))!;
+  assert.equal(r.extraHits, 0);
+  r.offsets.forEach((o, i) => assert.ok(o !== null && Math.abs(o - PLAYED[i]) <= 1.5, `note ${i}: ${o} vs ${PLAYED[i]}`));
+});
+
+test('close onsets merge into the louder one, wherever it comes', () => {
+  const hop = 0.5;
+  const at = (ms: number, peak: number) => ({ index: ms / hop, peak });
+  const merged = mergeCloseOnsets([at(100, 0.2), at(140, 0.8), at(400, 0.9), at(450, 0.3), at(700, 0.5)], hop, 75);
+  assert.deepEqual(merged, [at(140, 0.8), at(400, 0.9), at(700, 0.5)]);
+});
+
+test('the stroke window follows the exercise', () => {
+  const ex = (id: string) => EXERCISES.find((e) => e.id === id)!;
+  assert.equal(strokeGapMs(ex('single-stroke-roll'), 120), 150); // 8ths: 250 ms apart
+  assert.equal(strokeGapMs(ex('paradiddle'), 120), 75); // 16ths: 125 ms apart
+  assert.equal(strokeGapMs(ex('bossa-nova'), 100), 0.6 * 2 * 150); // closest notes are two 16ths apart
+  assert.equal(strokeGapMs(ex('paradiddle'), 240), 45); // never below the refractory period
 });
 
 test('stopping during the count-in is too short to score', () => {

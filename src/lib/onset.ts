@@ -138,26 +138,51 @@ export function maxIn(env: Float32Array, from: number, to: number): number {
 }
 
 /**
+ * One stroke on a pad often produces a second, weaker bump 40–90 ms later (the
+ * stick rebounding, the pad ringing), which the envelope rules alone can't tell
+ * from a new stroke. The exercise can: notes are never closer than its shortest
+ * note spacing. So onsets closer together than `minGapMs` are treated as one
+ * stroke, and the louder one (the real attack) is kept.
+ */
+export function mergeCloseOnsets(onsets: Onset[], hopMs: number, minGapMs: number): Onset[] {
+  const gap = minGapMs / hopMs;
+  const out: Onset[] = [];
+  for (const o of onsets) {
+    const last = out[out.length - 1];
+    if (last && o.index - last.index < gap) {
+      if (o.peak > last.peak) out[out.length - 1] = o;
+    } else out.push(o);
+  }
+  return out;
+}
+
+/** How long after a threshold crossing the peak of a hit is measured (same as detectOnsets). */
+const PEAK_WINDOW_MS = 15;
+
+/**
  * detectOnsets for audio that's still arriving: each scan() looks only at the
  * envelope added since the last call, with the same rules (cross the threshold,
- * re-arm below half of it, refractory period, back up to the attack). Used to
- * show hits while a test runs; the final score still uses detectOnsets on the
- * whole recording, where the threshold can take every hit into account.
+ * re-arm below half of it, refractory period, back up to the attack). An onset
+ * is reported once its whole peak window has arrived, so its peak matches what
+ * detectOnsets measures. Used to show hits while a test runs; the final score
+ * still uses detectOnsets on the whole recording, where the threshold can take
+ * every hit into account.
  */
 export class LiveOnsets {
   private next = 1;
   private last = -Infinity;
   private armed = true;
+  /** Onsets found whose peak window hasn't fully arrived yet. */
+  private pending: { start: number; crossing: number }[] = [];
 
   constructor(
     private readonly hopMs: number,
     private readonly refractoryMs = 45,
   ) {}
 
-  /** Envelope indices where new hits start. `threshold` may change between calls. */
-  scan(env: Float32Array, threshold: number): number[] {
+  /** Hits whose peak window is complete, oldest first. `threshold` may change between calls. */
+  scan(env: Float32Array, threshold: number): Onset[] {
     const refractory = Math.round(this.refractoryMs / this.hopMs);
-    const out: number[] = [];
     for (; this.next < env.length; this.next++) {
       const i = this.next;
       const v = env[i];
@@ -169,10 +194,16 @@ export class LiveOnsets {
         let start = i;
         const limit = Math.max(1, i - Math.round(8 / this.hopMs));
         while (start > limit && env[start - 1] > threshold * 0.2) start--;
-        out.push(start);
+        this.pending.push({ start, crossing: i });
         this.last = i;
         this.armed = false;
       }
+    }
+    const window = Math.round(PEAK_WINDOW_MS / this.hopMs);
+    const out: Onset[] = [];
+    while (this.pending.length && this.pending[0].crossing + window <= env.length) {
+      const { start, crossing } = this.pending.shift()!;
+      out.push({ index: start, peak: maxIn(env, crossing, crossing + window) });
     }
     return out;
   }

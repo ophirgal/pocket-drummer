@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ClockSync, perfNow } from '@/lib/clockSync';
 import type { Exercise } from '@/lib/exercises';
 import { EnvelopeBuilder, LiveOnsets } from '@/lib/onset';
-import { COUNT_IN_BEATS, SENSITIVITY, scoreTest } from '@/lib/scoring';
+import { COUNT_IN_BEATS, SENSITIVITY, scoreTest, strokeGapMs } from '@/lib/scoring';
 import type { AudioRoute, SessionResult, Settings } from '@/state/store';
 import { applyMicPreference, currentRoute, requestMicPermission } from './devices';
 import { getEngine, type Engine } from './engine';
@@ -34,6 +34,10 @@ interface Run {
   /** Hits found while the test runs, latency-corrected, on the audio clock. For display only. */
   liveHits: number[];
   live: LiveOnsets | null;
+  /** Peak level of the last live hit, to decide which of two close onsets is the stroke. */
+  lastLivePeak: number;
+  /** Onsets closer than this are one stroke (strokeGapMs). */
+  strokeGap: number;
   /** Loudest level heard during the count-in: the live detector's noise floor. */
   noise: number;
   /** Calibrated latency for this input and output (0 if none), applied to live hits. */
@@ -99,9 +103,20 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
     // Like the final scoring, hits must clear the count-in level by a margin.
     if (latestMs < scoredStart - 80) r.noise = Math.max(r.noise, env.recentPeak(20));
     const { floor, factor } = SENSITIVITY[r.settings.sensitivity];
-    for (const i of r.live.scan(env.envelope, Math.max(floor, r.noise * factor))) {
-      const t = r.sync.streamToContext(i * env.hopMs) - r.liveLatency;
-      if (t >= scoredStart - r.beatMs / 2) r.liveHits.push(t);
+    for (const o of r.live.scan(env.envelope, Math.max(floor, r.noise * factor))) {
+      const t = r.sync.streamToContext(o.index * env.hopMs) - r.liveLatency;
+      if (t < scoredStart - r.beatMs / 2) continue;
+      // Same rule as the final scoring: two onsets this close are one stroke; keep the louder.
+      const last = r.liveHits.length - 1;
+      if (last >= 0 && t - r.liveHits[last] < r.strokeGap) {
+        if (o.peak > r.lastLivePeak) {
+          r.liveHits[last] = t;
+          r.lastLivePeak = o.peak;
+        }
+        continue;
+      }
+      r.liveHits.push(t);
+      r.lastLivePeak = o.peak;
     }
   };
 
@@ -173,6 +188,8 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
         route: UNKNOWN_ROUTE,
         liveHits: [],
         live: null,
+        lastLivePeak: 0,
+        strokeGap: strokeGapMs(exercise, bpm),
         noise: 0,
         liveLatency: 0,
       };

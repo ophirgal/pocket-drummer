@@ -9,7 +9,7 @@
 import { analyze, buildExpectedNotes, median } from './analysis';
 import { coachFor } from './coach';
 import type { Exercise } from './exercises';
-import { detectOnsets, maxIn } from './onset';
+import { detectOnsets, maxIn, mergeCloseOnsets } from './onset';
 import { encodeRecording } from './recording';
 import type { InputMode, SessionResult, Sensitivity } from '@/state/store';
 
@@ -25,6 +25,22 @@ export const SENSITIVITY = {
   medium: { floor: 0.03, factor: 2.2 },
   high: { floor: 0.015, factor: 1.6 },
 } as const;
+
+/**
+ * Onsets closer together than this are one stroke (see mergeCloseOnsets): 60%
+ * of the shortest spacing between consecutive notes of the exercise, and never
+ * less than the detector's 45 ms refractory period.
+ */
+export function strokeGapMs(exercise: Exercise, bpm: number): number {
+  const stepMs = 60000 / bpm / exercise.stepsPerBeat;
+  const steps = exercise.bar.flatMap((n, s) => (n ? [s] : []));
+  let minSteps = exercise.bar.length;
+  steps.forEach((s, k) => {
+    const next = k + 1 < steps.length ? steps[k + 1] : steps[0] + exercise.bar.length; // wraps into the next bar
+    minSteps = Math.min(minSteps, next - s);
+  });
+  return Math.max(45, 0.6 * minSteps * stepMs);
+}
 
 export interface TakenTest {
   exercise: Exercise;
@@ -109,7 +125,9 @@ export function scoreTest(t: TakenTest): ScoredTest | null {
       .sort((x, y) => x - y);
     const hitLevel = candidates.length ? candidates[Math.floor(candidates.length * 0.75)] : Infinity;
     const threshold = Math.max(floor, Math.min(noise * factor, hitLevel * 0.5));
-    rawHits = detectOnsets(env, hopMs, { threshold, from, to }).map((o) => toTime(o.index));
+    rawHits = mergeCloseOnsets(detectOnsets(env, hopMs, { threshold, from, to }), hopMs, strokeGapMs(exercise, bpm)).map((o) =>
+      toTime(o.index),
+    );
 
     // Keep the recording, shifted by the latency so it lines up with the grid.
     recording = encodeRecording(-beatMs / 2, span + beatMs / 2, (a, b) =>
