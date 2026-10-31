@@ -5,8 +5,11 @@
  * variable is bundled into the app, so this is for local prototyping only; a real
  * release should call Claude from a backend instead. Without a key, the app uses
  * the on-device report from coach.ts.
+ *
+ * The SDK is loaded only when a report is requested: importing it at startup
+ * crashes the web build (a circular import Metro evaluates out of order), and
+ * without a key it's never needed.
  */
-import Anthropic from '@anthropic-ai/sdk';
 import { classShares, playedTempo, type Analysis } from './analysis';
 import type { Exercise } from './exercises';
 
@@ -20,7 +23,6 @@ export const aiCoachAvailable = !!apiKey;
  */
 export async function fetchAiReport(a: Analysis, ex: Exercise, bpm: number): Promise<string | null> {
   if (!apiKey) return null;
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   const shares = classShares(a);
   const stats = {
     exercise: ex.name,
@@ -44,6 +46,8 @@ export async function fetchAiReport(a: Analysis, ex: Exercise, bpm: number): Pro
     playedTempo: playedTempo(a, bpm)?.toFixed(1) ?? null,
   };
   try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     const response = await client.beta.messages.create({
       model: 'claude-opus-5-5',
       max_tokens: 1024,
