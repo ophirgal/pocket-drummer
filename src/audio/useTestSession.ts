@@ -22,6 +22,7 @@ const SENSITIVITY = {
   high: { floor: 0.015, factor: 1.6 },
 } as const;
 
+/** Everything about the test in progress. Kept in a ref so audio callbacks see it without re-renders. */
 interface Run {
   exercise: Exercise;
   bpm: number;
@@ -204,6 +205,7 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
     return true;
   }, []);
 
+  // phase/error/beat/elapsed/wave drive the UI; start/finish/cancel/tap control the test.
   return { phase, error, beat, elapsed, wave, start, finish, cancel, tap, clearError: () => setError(null) };
 }
 

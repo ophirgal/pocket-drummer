@@ -15,6 +15,10 @@ function icon(name: IconName, active: IconName) {
   };
 }
 
+/**
+ * The bottom tab bar (Home, Library, Progress, Profile). Users who haven't
+ * finished onboarding are redirected to the welcome screen first.
+ */
 export default function TabsLayout() {
   const { profile } = useStore();
   if (!profile.onboarded) return <Redirect href="/welcome" />;

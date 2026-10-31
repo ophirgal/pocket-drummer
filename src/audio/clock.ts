@@ -17,8 +17,14 @@ export interface ClockOptions {
   leadInMs?: number;
 }
 
+/** The one clock every timestamp in the app is measured on (ms, high resolution). */
 export const now = (): number => performance.now();
 
+/**
+ * Fires `onTick` every `intervalMs`, starting `leadInMs` from now, until
+ * `totalTicks` have fired (then `onDone`) or `stop()` is called. Used for the
+ * test click and for library previews.
+ */
 export class TickClock {
   private opts: ClockOptions | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;

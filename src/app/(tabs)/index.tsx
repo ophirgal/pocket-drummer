@@ -12,6 +12,10 @@ function greeting(): string {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
+/**
+ * Home tab: greeting, the entry point into the library, the free-test quota,
+ * and a shortcut to today's rotating challenge (a 2-minute test).
+ */
 export default function Home() {
   const { profile, testsLeft } = useStore();
   const challenge = todaysChallenge();

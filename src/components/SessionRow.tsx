@@ -6,6 +6,7 @@ import { formatDate, formatDuration } from '@/lib/session';
 import { colors, scoreColor, space } from '@/lib/theme';
 import { useStore, type SessionResult } from '@/state/store';
 
+/** One saved session in a list (name, date, length, BPM, score). Tap to open its detailed view. */
 export function SessionRow({ s, first }: { s: SessionResult; first?: boolean }) {
   const { setCurrent } = useStore();
   const name = exerciseById(s.exerciseId)?.name ?? 'Exercise';

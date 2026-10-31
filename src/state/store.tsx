@@ -1,3 +1,9 @@
+/**
+ * App-wide state in a single React context: settings, profile, saved sessions,
+ * the daily free-test count, and the session currently being viewed. Everything
+ * except `current` is persisted to AsyncStorage on each change.
+ */
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
@@ -114,6 +120,10 @@ function write(key: string, value: unknown) {
   AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {});
 }
 
+/**
+ * Loads persisted state on mount (`ready` stays false until then) and exposes it
+ * with update functions. Usage resets each day; history keeps the newest 300.
+ */
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -212,6 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+/** Read the store from any component under StoreProvider. */
 export function useStore(): Store {
   const s = useContext(Ctx);
   if (!s) throw new Error('useStore must be used inside StoreProvider');

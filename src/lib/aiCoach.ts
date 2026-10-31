@@ -14,6 +14,10 @@ const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
 
 export const aiCoachAvailable = !!apiKey;
 
+/**
+ * Sends a summary of the test's statistics to Claude and returns its coaching
+ * text, or null when there's no key, the request fails, or it's refused.
+ */
 export async function fetchAiReport(a: Analysis, ex: Exercise, bpm: number): Promise<string | null> {
   if (!apiKey) return null;
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });

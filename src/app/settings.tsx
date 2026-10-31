@@ -4,6 +4,11 @@ import { Body, Button, Card, Header, LinkRow, Screen, SliderRow, Tabs, ToggleRow
 import { colors, space } from '@/lib/theme';
 import { useStore, type InputMode, type Sensitivity } from '@/state/store';
 
+/**
+ * App settings: pocket width, click volume, default tempo, input mode (mic or
+ * tap), mic sensitivity, haptics, a link to latency calibration, and clearing
+ * the saved history. Every change is persisted immediately through the store.
+ */
 export default function Settings() {
   const { settings, updateSettings, clearSessions } = useStore();
   const latency = settings.latency[settings.inputMode];

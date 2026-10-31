@@ -9,6 +9,10 @@
 
 export const HOP_MS = 0.5;
 
+/**
+ * Streams microphone audio into a compact peak envelope: each 0.5 ms "hop" keeps
+ * the loudest (high-passed) sample in it. Index i covers stream time i * hopMs.
+ */
 export class EnvelopeBuilder {
   readonly sampleRate: number;
   readonly hopSamples: number;
@@ -38,6 +42,7 @@ export class EnvelopeBuilder {
     return this.env.subarray(0, this.length);
   }
 
+  /** Append a chunk of mono audio. Stops growing once the preallocated length is full. */
   push(samples: Float32Array): void {
     const { hopSamples, hpCoef } = this;
     for (let i = 0; i < samples.length; i++) {

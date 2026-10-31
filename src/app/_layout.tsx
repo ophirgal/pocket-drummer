@@ -4,6 +4,11 @@ import { View } from 'react-native';
 import { colors } from '@/lib/theme';
 import { StoreProvider, useStore } from '@/state/store';
 
+/**
+ * The root stack. Tabs are the base; every other screen (practice, result,
+ * settings, ...) slides in on top of them. Rendered inside StoreProvider so the
+ * whole app can read persisted state.
+ */
 function Navigator() {
   const { ready } = useStore();
   // Hold the first frame until saved settings load, so the welcome screen doesn't flash.
@@ -22,6 +27,7 @@ function Navigator() {
   );
 }
 
+/** App entry point (Expo Router root layout): provides the store to every screen. */
 export default function RootLayout() {
   return (
     <StoreProvider>

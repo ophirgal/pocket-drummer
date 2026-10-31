@@ -11,6 +11,11 @@ import { useStore } from '@/state/store';
 
 type Filter = 'All' | Category;
 
+/**
+ * Library tab: search and filter the exercises, preview each one's pattern by
+ * ear, and open it for practice. Locked (premium) exercises open the Premium
+ * screen instead.
+ */
 export default function Library() {
   const { profile } = useStore();
   const [tab, setTab] = useState<'library' | 'mine'>('library');

@@ -47,6 +47,10 @@ export interface Analysis {
   verdict: 'rushing' | 'dragging' | 'pocket';
 }
 
+/**
+ * Lay the exercise's pattern out in time: the moment each note should be played
+ * for `bars` bars starting at `startTime`. Rests produce no notes.
+ */
 export function buildExpectedNotes(ex: Exercise, bpm: number, startTime: number, bars: number): ExpectedNote[] {
   const stepMs = 60000 / bpm / ex.stepsPerBeat;
   const out: ExpectedNote[] = [];
@@ -65,6 +69,7 @@ export function buildExpectedNotes(ex: Exercise, bpm: number, startTime: number,
   return out;
 }
 
+/** Is this offset inside the pocket (±pocketMs), early (rushed) or late (dragged)? */
 export function classify(offset: number, pocketMs: number): HitClass {
   if (offset < -pocketMs) return 'rushed';
   if (offset > pocketMs) return 'dragged';
@@ -107,6 +112,7 @@ export function matchHits(hitTimes: number[], expected: ExpectedNote[]): { offse
   return { offsets, extra };
 }
 
+/** The full pipeline: match hits to notes, then compute every statistic. */
 export function analyze(hitTimes: number[], expected: ExpectedNote[], pocketMs: number, barLength: number): Analysis {
   const { offsets, extra } = matchHits(hitTimes, expected);
   const notes: NoteResult[] = expected.map((e, i) => ({

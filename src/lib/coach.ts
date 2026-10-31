@@ -17,6 +17,11 @@ export interface CoachText {
 const ms = (v: number) => `${Math.abs(Math.round(v))} ms`;
 const ordinal = (n: number) => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'][n] ?? `${n + 1}th`;
 
+/**
+ * Rule-based coaching: picks a headline from the score, answers "rushing or
+ * dragging?", and builds the report from whichever patterns stand out (overall
+ * lean, problem strokes, hand imbalance, tempo drift, consistency, missed notes).
+ */
 export function coachFor(a: Analysis, ex: Exercise, bpm: number): CoachText {
   if (a.hits < Math.max(4, a.expected * 0.25)) {
     return {

@@ -12,6 +12,13 @@ import { analysisOf } from '@/lib/session';
 import { colors, space } from '@/lib/theme';
 import { useStore } from '@/state/store';
 
+/**
+ * The score screen shown right after a test (or for any `current` session).
+ * Scores are recomputed from the stored offsets with the current pocket width,
+ * so they follow the setting. If an Anthropic key is configured, a Claude-written
+ * report is fetched once and replaces the on-device coaching text. Save Result
+ * adds the session to history.
+ */
 export default function Result() {
   const { current, settings, saveCurrent, updateCurrent } = useStore();
   const [aiDone, setAiDone] = useState(false);
@@ -96,6 +103,7 @@ export default function Result() {
   );
 }
 
+/** One line of the rushing / dragging / on-time breakdown. */
 function ShareRow({ icon, color, label, pct, note }: { icon: 'arrow-up' | 'arrow-down' | 'remove'; color: string; label: string; pct: number; note: string }) {
   return (
     <View style={styles.shareRow}>

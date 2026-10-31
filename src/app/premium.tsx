@@ -13,6 +13,10 @@ const PERKS = [
   { icon: 'sparkles', text: 'An AI coaching report after every test' },
 ] as const;
 
+/**
+ * The Premium upsell (shown as a modal). There are no real purchases yet: the
+ * button flips the profile's premium demo switch on or off.
+ */
 export default function Premium() {
   const { profile, updateProfile, testsLeft } = useStore();
   return (

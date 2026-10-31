@@ -10,6 +10,11 @@ import { analysisOf, formatDuration } from '@/lib/session';
 import { classColor, colors, space } from '@/lib/theme';
 import { useStore } from '@/state/store';
 
+/**
+ * The in-depth view of the `current` session: per-note average offsets on the
+ * notation, every hit on a timeline, the recording's waveform with hits coloured
+ * by class, summary stats, and a pocket-width slider that rescores live.
+ */
 export default function Detail() {
   const { current, settings, updateSettings } = useStore();
   const { width } = useWindowDimensions();

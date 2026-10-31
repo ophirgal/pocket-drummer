@@ -15,6 +15,7 @@ let pools: Record<Sound, AudioPlayer[]> | null = null;
 const cursor: Record<Sound, number> = { accent: 0, click: 0, pad: 0 };
 let recordingMode = false;
 
+/** Loads the click and pad sounds (once) and sets playback mode. Call before playing. */
 export async function initSounds(): Promise<void> {
   if (!pools) {
     pools = {
@@ -26,6 +27,7 @@ export async function initSounds(): Promise<void> {
   await setPlaybackMode();
 }
 
+/** Plain playback: sound plays in silent mode and mixes with other apps. */
 export async function setPlaybackMode(): Promise<void> {
   recordingMode = false;
   await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers', allowsRecording: false });
@@ -43,6 +45,7 @@ export async function setRecordingMode(): Promise<void> {
   });
 }
 
+/** Plays a sound immediately from the next player in its pool. No-op before initSounds. */
 export function play(sound: Sound, volume = 1): void {
   if (!pools) return;
   const pool = pools[sound];

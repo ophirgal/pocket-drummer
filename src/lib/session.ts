@@ -1,3 +1,5 @@
+/** Helpers for working with stored sessions: rebuilding their analysis and formatting them for display. */
+
 import { summarize, type Analysis, type NoteResult } from './analysis';
 import { exerciseById, type Exercise } from './exercises';
 import type { SessionResult } from '@/state/store';

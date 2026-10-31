@@ -11,6 +11,7 @@ import { useStore } from '@/state/store';
 const DAY = 86400000;
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
+/** A small line chart of recent scores, auto-scaled to their range. */
 function Sparkline({ values, width, height }: { values: number[]; width: number; height: number }) {
   if (values.length < 2) return null;
   const min = Math.min(...values) - 5;
@@ -30,6 +31,10 @@ function Sparkline({ values, width, height }: { values: number[]; width: number;
   );
 }
 
+/**
+ * Progress tab: average score with the change versus the previous week, overall
+ * stats, and the list of saved sessions (tap one to reopen its detailed view).
+ */
 export default function Progress() {
   const { sessions } = useStore();
   const [tab, setTab] = useState<'overview' | 'history'>('overview');

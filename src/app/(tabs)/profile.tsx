@@ -5,6 +5,10 @@ import { Body, Card, LinkRow, Screen, ToggleRow } from '@/components/ui';
 import { colors, radius, space } from '@/lib/theme';
 import { FREE_TESTS_PER_DAY, useStore } from '@/state/store';
 
+/**
+ * Profile tab: edit your name, see your plan and today's usage, toggle the
+ * premium demo switch, and jump to settings, calibration or history.
+ */
 export default function Profile() {
   const { profile, updateProfile, testsToday, sessions } = useStore();
   const [name, setName] = useState(profile.name);

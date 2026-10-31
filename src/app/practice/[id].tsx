@@ -16,6 +16,16 @@ import { useStore } from '@/state/store';
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
+/**
+ * The recording screen for one exercise (route param `id`; optional `minutes`
+ * sets the test length). Pick a tempo and duration, press play, and
+ * useTestSession runs the count-in, click and listening. When the test ends the
+ * result is stored as `current` and the app moves on to the Result screen.
+ *
+ * While idle it shows the notation; while running it shows a live waveform (mic
+ * mode) or a tap pad (tap mode). Starting a test is blocked when the free daily
+ * quota is used up.
+ */
 export default function Practice() {
   const { id, minutes } = useLocalSearchParams<{ id: string; minutes?: string }>();
   const exercise = exerciseById(id);
@@ -173,6 +183,7 @@ export default function Practice() {
   );
 }
 
+/** A round secondary control (Restart / Cancel) beside the main play button. */
 function Control({ icon, label, onPress, disabled }: { icon: 'refresh' | 'close'; label: string; onPress: () => void; disabled?: boolean }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} style={[styles.control, disabled && { opacity: 0.4 }]}>

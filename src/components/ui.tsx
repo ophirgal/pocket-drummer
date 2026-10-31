@@ -1,3 +1,7 @@
+/**
+ * Shared UI building blocks, styled with the theme in src/lib/theme.ts. Screens
+ * are composed from these rather than styling raw React Native views.
+ */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +32,10 @@ export function Backdrop({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The wrapper for every screen: backdrop, safe-area padding and standard gaps.
+ * Scrolls by default; pass `scroll={false}` for fixed layouts.
+ */
 export function Screen({
   children,
   scroll = true,
@@ -54,6 +62,7 @@ export function Screen({
   );
 }
 
+/** Screen title bar with an optional back button and right-hand slot. */
 export function Header({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
   return (
     <View style={styles.header}>
@@ -78,6 +87,7 @@ export function Body({ children, style }: { children: ReactNode; style?: StylePr
   return <Text style={[styles.body, style]}>{children}</Text>;
 }
 
+/** The standard button: `primary` (gradient), `secondary` (outlined) or `ghost` (text only). */
 export function Button({
   title,
   onPress,
@@ -161,6 +171,7 @@ export function Badge({ label }: { label: string }) {
   );
 }
 
+/** A segmented control for switching between a few options of type T. */
 export function Tabs<T extends string>({
   options,
   value,

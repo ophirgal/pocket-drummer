@@ -6,6 +6,10 @@ import { Button, Screen } from '@/components/ui';
 import { colors, radius, space } from '@/lib/theme';
 import { useStore } from '@/state/store';
 
+/**
+ * First-run onboarding. Asks for a name, then marks the profile as onboarded so
+ * the tabs stop redirecting here. Log In is a placeholder for future accounts.
+ */
 export default function Welcome() {
   const { updateProfile, profile } = useStore();
   const [askName, setAskName] = useState(false);

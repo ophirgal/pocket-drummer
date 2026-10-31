@@ -1,3 +1,4 @@
+/** Design tokens: the app is dark-only, so colours are fixed rather than theme-dependent. */
 export const colors = {
   bg: '#0B0A1A',
   bgTop: '#17123A',
@@ -32,6 +33,7 @@ export const classColor: Record<HitClass, string> = {
   dragged: colors.dragged,
 };
 
+/** Green for good scores (75+), gold for middling (50+), pink below. */
 export function scoreColor(score: number): string {
   if (score >= 75) return colors.onTime;
   if (score >= 50) return colors.gold;

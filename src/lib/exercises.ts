@@ -31,6 +31,7 @@ export interface Exercise {
 }
 
 const n = (hand: Hand, extra: Partial<Note> = {}): Note => ({ hand, ...extra });
+/** Build a bar from a sticking string like 'RLRR-L' ('-' is a rest), marking accent and flam steps by index. */
 const seq = (sticking: string, accents: number[] = [], flams: number[] = []): (Note | null)[] =>
   sticking
     .split('')
