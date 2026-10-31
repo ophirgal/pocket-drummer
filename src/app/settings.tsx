@@ -38,10 +38,10 @@ export default function Settings() {
           value={settings.pocketMs}
           min={10}
           max={50}
-          step={1}
+          step={5}
           format={(v) => `± ${v} ms`}
           ticks={['10 ms', '20 ms', '30 ms', '40 ms', '50 ms']}
-          onChange={(v) => updateSettings({ pocketMs: Math.round(v) })}
+          onChange={(v) => updateSettings({ pocketMs: Math.round(v / 5) * 5 })}
         />
         <Body>This defines how close to the beat your hits need to be to be considered “in the pocket”. The default is ±20 ms.</Body>
       </Card>

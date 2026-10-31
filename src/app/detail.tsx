@@ -88,10 +88,10 @@ export default function Detail() {
           value={settings.pocketMs}
           min={10}
           max={50}
-          step={1}
+          step={5}
           format={(v) => `± ${v} ms`}
           ticks={['10 ms', '20 ms', '30 ms', '40 ms', '50 ms']}
-          onChange={(v) => updateSettings({ pocketMs: Math.round(v) })}
+          onChange={(v) => updateSettings({ pocketMs: Math.round(v / 5) * 5 })}
         />
         <Body>Drag to see how your score changes with a tighter or looser pocket.</Body>
       </Card>
