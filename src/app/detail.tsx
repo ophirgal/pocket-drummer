@@ -58,8 +58,8 @@ export default function Detail() {
           width={inner}
         />
         <Text style={styles.caption}>
-          Dots are the notes you were meant to play, numbered by bar; lines below are your hits in the recording. Shaded bands are the
-          pocket. Scroll sideways to see the whole test.
+          Rings are the notes you were meant to play, numbered by bar; ticks are your hits, running down into the recording. Shaded bands
+          are the pocket. Scroll sideways to see the whole test.
         </Text>
       </Card>
 

@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Mascot } from '@/components/art';
+import { GridWaveform } from '@/components/GridWaveform';
 import { Ring } from '@/components/Ring';
 import { Body, Button, Card, Header, Screen } from '@/components/ui';
 import { aiCoachAvailable, fetchAiReport } from '@/lib/aiCoach';
 import { classShares } from '@/lib/analysis';
 import { coachFor } from '@/lib/coach';
+import { decodeRecording } from '@/lib/recording';
 import { analysisOf } from '@/lib/session';
 import { colors, space } from '@/lib/theme';
 import { useStore } from '@/state/store';
@@ -15,14 +17,18 @@ import { useStore } from '@/state/store';
 /**
  * The score screen shown right after a test (or for any `current` session).
  * Scores are recomputed from the stored offsets with the current pocket width,
- * so they follow the setting. If an Anthropic key is configured, a Claude-written
+ * so they follow the setting. Below the score, every hit is drawn on top of the
+ * note it was meant to be, so you can see exactly where each one landed. If an Anthropic key is configured, a Claude-written
  * report is fetched once and replaces the on-device coaching text. Save Result
  * adds the session to history.
  */
 export default function Result() {
   const { current, settings, saveCurrent, updateCurrent } = useStore();
   const [aiDone, setAiDone] = useState(false);
+  const { width } = useWindowDimensions();
   const built = useMemo(() => (current ? analysisOf(current, settings.pocketMs) : null), [current, settings.pocketMs]);
+  const stored = current?.recording;
+  const recording = useMemo(() => (stored ? decodeRecording(stored) : null), [stored]);
 
   useEffect(() => {
     if (!built || !current || !aiCoachAvailable || current.aiReport || built.analysis.hits < 4) return;
@@ -67,6 +73,22 @@ export default function Result() {
         <ShareRow icon="arrow-up" color={colors.rushed} label="Rushing" pct={shares.rushed} note="(ahead of beat)" />
         <ShareRow icon="arrow-down" color={colors.dragged} label="Dragging" pct={shares.dragged} note="(behind beat)" />
         <ShareRow icon="remove" color={colors.textMuted} label="On time" pct={shares.onTime} note="(within pocket)" />
+      </Card>
+
+      <Card>
+        <Text style={styles.coachTitle}>Where your hits landed</Text>
+        <GridWaveform
+          exercise={exercise}
+          bpm={current.bpm}
+          notes={analysis.notes}
+          hits={current.hits}
+          recording={recording}
+          pocketMs={settings.pocketMs}
+          width={Math.min(width, 520) - space.md * 4}
+        />
+        <Text style={styles.caption}>
+          A tick left of its ring was early, right of it was late; the shaded band is the pocket. Scroll sideways through the test.
+        </Text>
       </Card>
 
       <Card style={styles.coach}>

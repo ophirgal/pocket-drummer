@@ -7,28 +7,36 @@ import { levelBetween, type Recording } from '@/lib/recording';
 import { classColor, colors, space, type HitClass } from '@/lib/theme';
 import { Chip } from './ui';
 
-const ZOOMS = { Close: 150, Normal: 72, Overview: 28 } as const; // px per beat
-type Zoom = keyof typeof ZOOMS;
+export const ZOOMS = { Strokes: 320, Beats: 120, Bars: 44 } as const; // px per beat
+export type Zoom = keyof typeof ZOOMS;
 
 const TILE_W = 512;
-const HEIGHT = 176;
-const RULER_Y = 11;
-const NOTE_Y = 30;
-const LANE_TOP = 22;
-const WAVE_TOP = 48;
+const HEIGHT = 190;
+/** Without a recording there's no waveform lane, only the notes and hits. */
+const HEIGHT_NO_RECORDING = 100;
+const RULER_Y = 12;
+const HAND_Y = 27;
+const NOTE_Y = 44;
+const LANE_TOP = 33; // top of the pocket bands and beat lines
+const TICK_TOP = NOTE_Y - 11;
+const WAVE_TOP = 66;
 const WAVE_MID = (WAVE_TOP + HEIGHT - 6) / 2;
 const WAVE_HALF = (HEIGHT - 6 - WAVE_TOP) / 2;
 const CLASSES: HitClass[] = ['onTime', 'rushed', 'dragged'];
 
 /**
- * The recording laid over the beat grid. Top to bottom: bar numbers, the
- * intended notes (coloured by how each one landed, with a line to where it was
- * actually played) and the recorded waveform with every detected hit. Shaded
- * bands are the pocket around each note. Scrolls sideways; drawn in tiles so
- * long tests stay fast.
+ * Where each hit landed relative to the note it was meant to be.
  *
- * Times are in ms from the first scored beat, latency-corrected: `notes` from
- * analysisOf, `hits` and `recording` from the stored session.
+ * Every note of the test sits on the beat grid as a white ring (bigger for
+ * accents, dashed if it was missed). Each hit the app detected is a tick through
+ * that same row, coloured on time / rushed / dragged, with a bar from the note
+ * to the hit showing how far off it was; when zoomed in, the offset is written
+ * under it. The ticks continue down into the recorded waveform, so each one can
+ * be matched to the sound that made it. Shaded bands are the pocket.
+ *
+ * Scrolls sideways and is drawn in tiles, so long tests stay fast. Times are in
+ * ms from the first scored beat, latency-corrected: `notes` from analysisOf,
+ * `hits` and `recording` from the stored session.
  */
 export function GridWaveform({
   exercise,
@@ -38,6 +46,7 @@ export function GridWaveform({
   recording,
   pocketMs,
   width,
+  initialZoom = 'Beats',
 }: {
   exercise: Exercise;
   bpm: number;
@@ -46,8 +55,9 @@ export function GridWaveform({
   recording?: Recording | null;
   pocketMs: number;
   width: number;
+  initialZoom?: Zoom;
 }) {
-  const [zoom, setZoom] = useState<Zoom>('Normal');
+  const [zoom, setZoom] = useState<Zoom>(initialZoom);
   const beatMs = 60000 / bpm;
   const stepMs = beatMs / exercise.stepsPerBeat;
   const bars = notes.length ? notes[notes.length - 1].bar + 1 : 1;
@@ -69,6 +79,7 @@ export function GridWaveform({
       hits={hits}
       recording={recording}
       pocketMs={pocketMs}
+      height={recording ? HEIGHT : HEIGHT_NO_RECORDING}
     />
   );
 
@@ -92,7 +103,22 @@ export function GridWaveform({
           showsHorizontalScrollIndicator={false}
         />
       </View>
+      <View style={styles.legend}>
+        <Key ring label="Note to play" />
+        <Key color={classColor.onTime} label="Your hit: on time" />
+        <Key color={classColor.rushed} label="early" />
+        <Key color={classColor.dragged} label="late" />
+      </View>
       {!recording && <Text style={styles.note}>No recording for this session: showing the notes and hits only.</Text>}
+    </View>
+  );
+}
+
+function Key({ color, ring, label }: { color?: string; ring?: boolean; label: string }) {
+  return (
+    <View style={styles.key}>
+      {ring ? <View style={styles.ring} /> : <View style={[styles.tick, { backgroundColor: color }]} />}
+      <Text style={styles.keyText}>{label}</Text>
     </View>
   );
 }
@@ -109,6 +135,7 @@ function Tile({
   hits,
   recording,
   pocketMs,
+  height,
 }: {
   w: number;
   t0: number;
@@ -120,6 +147,7 @@ function Tile({
   hits?: number[];
   recording?: Recording | null;
   pocketMs: number;
+  height: number;
 }) {
   const t1 = t0 + w / pxPerMs;
   const x = (t: number) => (t - t0) * pxPerMs;
@@ -139,34 +167,36 @@ function Tile({
   for (let s = firstStep; s <= lastStep; s++) {
     const px = x(s * stepMs).toFixed(1);
     if (s % stepsPerBar === 0) {
-      barPath += `M${px} ${LANE_TOP - 4}V${HEIGHT}`;
+      barPath += `M${px} ${RULER_Y + 4}V${height}`;
       if (s < bars * stepsPerBar) labels.push({ x: x(s * stepMs), n: s / stepsPerBar + 1 });
-    } else if (s % spb === 0) beatPath += `M${px} ${LANE_TOP}V${HEIGHT}`;
-    else if (stepPx >= 9) subPath += `M${px} ${WAVE_TOP}V${HEIGHT}`;
+    } else if (s % spb === 0) beatPath += `M${px} ${LANE_TOP}V${height}`;
+    else if (stepPx >= 9) subPath += `M${px} ${LANE_TOP}V${height}`;
   }
 
-  // Pocket bands, intended notes, and the line from each note to where it was played.
+  // Pocket bands, the notes to play, and each hit with its distance from its note.
   let pocket = '';
-  const dots: Record<HitClass | 'missed', string> = { onTime: '', rushed: '', dragged: '', missed: '' };
-  const hitLines: Record<HitClass, string> = { onTime: '', rushed: '', dragged: '' };
-  const links: Record<HitClass, string> = { onTime: '', rushed: '', dragged: '' };
+  let rings = '';
+  let missed = '';
+  const ticks: Record<HitClass, string> = { onTime: '', rushed: '', dragged: '' };
+  const gaps: Record<HitClass, string> = { onTime: '', rushed: '', dragged: '' };
   const hands: { x: number; hand: string }[] = [];
+  const offsets: { x: number; text: string; c: HitClass }[] = [];
   for (const n of notes) {
     const played = n.offset === null ? null : n.time + n.offset;
     if (!inView(n.time) && (played === null || !inView(played))) continue;
     const nx = x(n.time);
-    pocket += `M${x(n.time - pocketMs).toFixed(1)} ${LANE_TOP}H${x(n.time + pocketMs).toFixed(1)}V${HEIGHT - 4}H${x(n.time - pocketMs).toFixed(1)}Z`;
-    const accent = exercise.bar[n.step]?.accent;
-    const r = accent ? 4.5 : 3.5;
-    const circle = `M${(nx - r).toFixed(1)} ${NOTE_Y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+    pocket += `M${x(n.time - pocketMs).toFixed(1)} ${LANE_TOP}H${x(n.time + pocketMs).toFixed(1)}V${height - 4}H${x(n.time - pocketMs).toFixed(1)}Z`;
+    const r = exercise.bar[n.step]?.accent ? 6.5 : 5;
+    const ring = `M${(nx - r).toFixed(1)} ${NOTE_Y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
     if (played === null || n.offset === null) {
-      dots.missed += circle;
+      missed += ring;
     } else {
+      rings += ring;
       const c = classify(n.offset, pocketMs);
-      dots[c] += circle;
       const hx = x(played).toFixed(1);
-      hitLines[c] += `M${hx} ${WAVE_TOP}V${HEIGHT - 6}`;
-      links[c] += `M${nx.toFixed(1)} ${NOTE_Y}L${hx} ${WAVE_TOP}`;
+      ticks[c] += `M${hx} ${TICK_TOP}V${height - 6}`;
+      gaps[c] += `M${nx.toFixed(1)} ${NOTE_Y}H${hx}`;
+      if (stepPx >= 28) offsets.push({ x: x(played), text: `${n.offset > 0 ? '+' : ''}${Math.round(n.offset)}`, c });
     }
     if (stepPx >= 14) hands.push({ x: nx, hand: n.hand });
   }
@@ -177,8 +207,7 @@ function Tile({
     const matched = notes.filter((n) => n.offset !== null).map((n) => n.time + n.offset!);
     for (const h of hits) {
       if (!inView(h) || matched.some((m) => Math.abs(m - h) < 0.5)) continue;
-      const hx = x(h).toFixed(1);
-      extra += `M${hx} ${WAVE_TOP}V${HEIGHT - 6}`;
+      extra += `M${x(h).toFixed(1)} ${TICK_TOP}V${height - 6}`;
     }
   }
 
@@ -199,22 +228,20 @@ function Tile({
   }
 
   return (
-    <Svg width={w} height={HEIGHT}>
+    <Svg width={w} height={height}>
       <Path d={pocket} fill={colors.pocket} />
-      <Path d={subPath} stroke={colors.border} strokeWidth={0.5} opacity={0.5} />
+      <Path d={subPath} stroke={colors.border} strokeWidth={0.5} opacity={0.6} />
       <Path d={beatPath} stroke={colors.border} strokeWidth={1} />
       <Path d={barPath} stroke={colors.textDim} strokeWidth={1.2} />
       {wave ? <Path d={wave} fill={colors.primaryDeep} opacity={0.85} /> : null}
-      <Path d={extra} stroke={colors.textDim} strokeWidth={1.2} strokeDasharray="3 3" />
+      <Path d={missed} fill="none" stroke={colors.textDim} strokeWidth={1.2} strokeDasharray="2 2" />
+      <Path d={rings} fill={colors.surface} stroke={colors.text} strokeWidth={1.6} />
       {CLASSES.map((c) => (
-        <Path key={`l${c}`} d={links[c]} stroke={classColor[c]} strokeWidth={1} opacity={0.7} />
+        <Path key={`g${c}`} d={gaps[c]} stroke={classColor[c]} strokeWidth={3} strokeLinecap="round" opacity={0.8} />
       ))}
+      <Path d={extra} stroke={colors.textDim} strokeWidth={1.5} strokeDasharray="3 3" />
       {CLASSES.map((c) => (
-        <Path key={`h${c}`} d={hitLines[c]} stroke={classColor[c]} strokeWidth={1.6} />
-      ))}
-      <Path d={dots.missed} fill="none" stroke={colors.textDim} strokeWidth={1.2} />
-      {CLASSES.map((c) => (
-        <Path key={`d${c}`} d={dots[c]} fill={classColor[c]} />
+        <Path key={`t${c}`} d={ticks[c]} stroke={classColor[c]} strokeWidth={2} />
       ))}
       {labels.map((l) => (
         <SvgText key={`b${l.n}`} x={l.x + 3} y={RULER_Y} fill={colors.textMuted} fontSize={10} fontWeight="600">
@@ -222,8 +249,13 @@ function Tile({
         </SvgText>
       ))}
       {hands.map((h, i) => (
-        <SvgText key={`s${i}`} x={h.x} y={NOTE_Y + 14} fill={colors.textDim} fontSize={8} textAnchor="middle">
+        <SvgText key={`s${i}`} x={h.x} y={HAND_Y} fill={colors.textDim} fontSize={9} textAnchor="middle">
           {h.hand}
+        </SvgText>
+      ))}
+      {offsets.map((o, i) => (
+        <SvgText key={`o${i}`} x={o.x + 4} y={WAVE_TOP + 8} fill={classColor[o.c]} fontSize={9} fontWeight="600">
+          {o.text}
         </SvgText>
       ))}
     </Svg>
@@ -233,5 +265,10 @@ function Tile({
 const styles = StyleSheet.create({
   zooms: { flexDirection: 'row', gap: space.sm },
   frame: { borderRadius: 10, overflow: 'hidden', backgroundColor: colors.surface },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.md, rowGap: 4 },
+  key: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  ring: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: colors.text },
+  tick: { width: 2.5, height: 12, borderRadius: 1 },
+  keyText: { color: colors.textMuted, fontSize: 12 },
   note: { color: colors.textDim, fontSize: 12 },
 });
