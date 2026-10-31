@@ -69,6 +69,12 @@ export default function Practice() {
     setTimeout(start, 150);
   };
 
+  /** Use this length now, and remember it as the default for next time. */
+  const pickDuration = (s: number) => {
+    setDurationSec(s);
+    updateSettings({ durationSec: s });
+  };
+
   const nudge = (d: number) => setBpm((b) => Math.min(exercise.bpmRange[1], Math.max(exercise.bpmRange[0], b + d)));
 
   let status = 'Press play. You get one bar of count-in: listen, then start playing on beat one.';
@@ -170,7 +176,7 @@ export default function Practice() {
         <View style={{ gap: space.sm }}>
           <View style={styles.chips}>
             {[10, 30, 60, 120].map((s) => (
-              <Chip key={s} label={formatDuration(s)} active={durationSec === s} onPress={() => setDurationSec(s)} />
+              <Chip key={s} label={formatDuration(s)} active={durationSec === s} onPress={() => pickDuration(s)} />
             ))}
           </View>
           <Text style={styles.hint}>

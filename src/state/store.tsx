@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS: Settings = {
   pocketMs: 20,
   clickVolume: 0.7,
   defaultTempo: 120,
-  durationSec: 60,
+  durationSec: 10,
   haptics: true,
   inputMode: 'mic',
   sensitivity: 'medium',
