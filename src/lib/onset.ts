@@ -42,8 +42,15 @@ export class EnvelopeBuilder {
     return this.env.subarray(0, this.length);
   }
 
-  /** Append a chunk of mono audio. Stops growing once the preallocated length is full. */
-  push(samples: Float32Array): void {
+  /**
+   * Append a chunk of mono audio. `atSample` is where the chunk starts in the
+   * stream; if the recorder dropped audio before it, the gap is filled with
+   * silence so later hits keep their true time. Stops growing once the
+   * preallocated length is full.
+   */
+  push(samples: Float32Array, atSample = this.totalSamples): void {
+    const gap = Math.min(atSample - this.totalSamples, this.env.length * this.hopSamples);
+    if (gap > 0) this.push(new Float32Array(gap));
     const { hopSamples, hpCoef } = this;
     for (let i = 0; i < samples.length; i++) {
       const x = samples[i];
@@ -68,15 +75,6 @@ export class EnvelopeBuilder {
     for (let i = Math.max(0, this.length - hops); i < this.length; i++) if (this.env[i] > p) p = this.env[i];
     return p;
   }
-}
-
-/** Convert an int16 or float32 PCM buffer to mono float32. */
-export function toMonoFloat(data: ArrayBuffer, channels: number, encoding: 'float32' | 'int16'): Float32Array {
-  const src = encoding === 'int16' ? Int16Array.from(new Int16Array(data), (v) => v / 32768) : new Float32Array(data);
-  if (channels <= 1) return src instanceof Float32Array ? src : new Float32Array(src);
-  const out = new Float32Array(Math.floor(src.length / channels));
-  for (let i = 0; i < out.length; i++) out[i] = src[i * channels];
-  return out;
 }
 
 export interface DetectOptions {

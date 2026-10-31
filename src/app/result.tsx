@@ -87,7 +87,18 @@ export default function Result() {
       <Text style={styles.footnote}>
         Pocket ±{settings.pocketMs} ms • {analysis.hits}/{analysis.expected} notes detected
         {current.latencySource !== 'none' ? ` • ${Math.round(current.latencyMs)} ms latency corrected` : ''}
+        {current.route ? ` • ${current.route.label}` : ''}
+        {current.micName ? ` • ${current.micName}` : ''}
       </Text>
+      {current.latencySource === 'none' && current.route?.headphones && (
+        <Card style={{ borderColor: colors.gold }}>
+          <Body>
+            Your headphones add a delay the app can&apos;t hear, so these timings aren&apos;t corrected for it yet. Calibrate once for{' '}
+            {current.route.label} to make them exact.
+          </Body>
+          <Button title="Calibrate latency" variant="secondary" onPress={() => router.push('/calibrate')} />
+        </Card>
+      )}
 
       <Button title={current.saved ? 'Saved ✓' : 'Save Result'} onPress={save} disabled={current.saved} />
       <View style={{ flexDirection: 'row', gap: space.sm }}>

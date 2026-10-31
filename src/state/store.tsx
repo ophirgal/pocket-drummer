@@ -8,9 +8,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { CoachText } from '@/lib/coach';
+import type { StoredRecording } from '@/lib/recording';
 
 export type InputMode = 'mic' | 'tap';
 export type Sensitivity = 'low' | 'medium' | 'high';
+
+/** Record from the phone's own microphone, even when headphones with a mic are plugged in. */
+export const MIC_BUILTIN = 'builtin';
 
 export interface Settings {
   /** Half-width of the pocket around each beat, in ms. */
@@ -21,8 +25,26 @@ export interface Settings {
   haptics: boolean;
   inputMode: InputMode;
   sensitivity: Sensitivity;
-  /** Measured by the calibration screen, per input mode. Null = not calibrated. */
-  latency: Record<InputMode, number | null>;
+  /**
+   * MIC_BUILTIN, or the id of a specific input device (used while it's
+   * connected; otherwise the built-in mic is used).
+   */
+  micInput: string;
+  /** Display name of the chosen device, for when it isn't connected. */
+  micInputName?: string;
+  /**
+   * Measured by the calibration screen, per input mode and per audio output
+   * (speaker, wired headphones, each Bluetooth headset), since each output has
+   * its own delay. Keyed by AudioRoute.key; missing = not calibrated.
+   */
+  latency: Record<InputMode, Record<string, number>>;
+}
+
+/** Where the click is playing, which decides the latency correction. */
+export interface AudioRoute {
+  key: string;
+  label: string;
+  headphones: boolean;
 }
 
 export interface Profile {
@@ -43,12 +65,16 @@ export interface SessionResult {
   /** Offset of each expected note (null = missed), in pattern order. */
   offsets: (number | null)[];
   extraHits: number;
-  /** Downsampled recording level, 0..1, for the waveform. */
-  waveform: number[];
-  /** Hit positions on the waveform, 0..1. */
-  hitMarks: number[];
+  /** Every detected hit, latency-corrected, in ms from the first scored beat. */
+  hits?: number[];
+  /** The recording's level over time, for drawing it over the beat grid (mic mode only). */
+  recording?: StoredRecording;
   latencyMs: number;
   latencySource: 'speaker' | 'calibrated' | 'none';
+  /** The audio output the click played through. */
+  route?: AudioRoute;
+  /** The microphone that recorded the test. */
+  micName?: string;
   /** Pocket width when the test was taken; the score is recomputed live from offsets. */
   pocketMs: number;
   score: number;
@@ -71,8 +97,12 @@ const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   inputMode: 'mic',
   sensitivity: 'medium',
-  latency: { mic: null, tap: null },
+  micInput: MIC_BUILTIN,
+  latency: { mic: {}, tap: {} },
 };
+
+/** Saved sessions beyond this many keep their scores but drop the recording, to keep storage small. */
+const SESSIONS_WITH_RECORDING = 30;
 
 const DEFAULT_PROFILE: Profile = { name: '', onboarded: false, premium: false };
 
@@ -121,8 +151,20 @@ function write(key: string, value: unknown) {
 }
 
 /**
+ * Older versions stored one number per input mode, measured with a different
+ * audio engine and without knowing the output. Those values don't apply any
+ * more, so they're dropped and the user recalibrates.
+ */
+function migrateLatency(stored: unknown): Settings['latency'] {
+  const l = stored as Partial<Record<InputMode, unknown>> | undefined;
+  const ok = (v: unknown): v is Record<string, number> => typeof v === 'object' && v !== null;
+  return { mic: ok(l?.mic) ? l.mic : {}, tap: ok(l?.tap) ? l.tap : {} };
+}
+
+/**
  * Loads persisted state on mount (`ready` stays false until then) and exposes it
- * with update functions. Usage resets each day; history keeps the newest 300.
+ * with update functions. Usage resets each day; history keeps the newest 300
+ * sessions, and the newest 30 of those keep their recordings.
  */
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -143,7 +185,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         list = JSON.parse((await AsyncStorage.getItem(KEYS.sessions)) ?? '[]');
       } catch {}
-      setSettings({ ...s, latency: { ...DEFAULT_SETTINGS.latency, ...s.latency } });
+      setSettings({ ...s, latency: migrateLatency(s.latency) });
       setProfile(p);
       setSessions(list);
       setUsage(u.day === today() ? u : { day: today(), tests: 0 });
@@ -176,7 +218,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!cur) return cur;
       const saved = { ...cur, saved: true };
       setSessions((prev) => {
-        const next = [saved, ...prev.filter((s) => s.id !== saved.id)].slice(0, 300);
+        const next = [saved, ...prev.filter((s) => s.id !== saved.id)]
+          .slice(0, 300)
+          .map((s, i) => (i >= SESSIONS_WITH_RECORDING && s.recording ? { ...s, recording: undefined } : s));
         write(KEYS.sessions, next);
         return next;
       });

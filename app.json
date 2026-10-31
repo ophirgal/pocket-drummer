@@ -22,15 +22,22 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-audio",
-        {
-          "microphonePermission": "Pocket Pro listens to your drum pad to measure your timing."
-        }
-      ],
       "expo-router",
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "react-native-audio-api",
+        {
+          "iosMicrophonePermission": "Pocket Pro listens to your drum pad to measure your timing.",
+          "iosBackgroundMode": false,
+          "androidPermissions": [
+            "android.permission.RECORD_AUDIO",
+            "android.permission.MODIFY_AUDIO_SETTINGS"
+          ],
+          "androidForegroundService": false,
+          "disableFFmpeg": true
+        }
+      ]
     ],
     "scheme": "pocketpro",
     "experiments": {

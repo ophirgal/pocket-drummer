@@ -1,17 +1,21 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { canChooseMic, useAudioDevices, type Mic } from '@/audio/devices';
 import { Body, Button, Card, Header, LinkRow, Screen, SliderRow, Tabs, ToggleRow } from '@/components/ui';
 import { colors, space } from '@/lib/theme';
-import { useStore, type InputMode, type Sensitivity } from '@/state/store';
+import { MIC_BUILTIN, useStore, type InputMode, type Sensitivity } from '@/state/store';
 
 /**
  * App settings: pocket width, click volume, default tempo, input mode (mic or
- * tap), mic sensitivity, haptics, a link to latency calibration, and clearing
- * the saved history. Every change is persisted immediately through the store.
+ * tap), mic sensitivity, which microphone records, haptics, a link to latency
+ * calibration for the current audio output, and clearing the saved history. Every change is persisted immediately through the store.
  */
 export default function Settings() {
   const { settings, updateSettings, clearSessions } = useStore();
-  const latency = settings.latency[settings.inputMode];
+  const { mics, route } = useAudioDevices();
+  const latency = route ? settings.latency[settings.inputMode][route.key] : undefined;
+  const autoLatency = settings.inputMode === 'mic' && route !== null && !route.headphones;
 
   const confirmClear = () => {
     if (Platform.OS === 'web') {
@@ -89,11 +93,19 @@ export default function Settings() {
               onChange={(v) => updateSettings({ sensitivity: v })}
             />
             <Body>Lower it if room noise counts as hits; raise it if soft strokes are missed.</Body>
+            <Text style={styles.label}>Microphone</Text>
+            <MicPicker
+              mics={mics}
+              value={settings.micInput}
+              savedName={settings.micInputName}
+              onChange={(m) => updateSettings({ micInput: m.id, micInputName: m.name })}
+            />
           </>
         )}
+        {route && <Text style={styles.route}>Sound is playing through: {route.label}</Text>}
         <LinkRow
           label="Calibrate latency"
-          value={latency === null ? (settings.inputMode === 'mic' ? 'Auto' : 'Not set') : `${latency} ms`}
+          value={latency !== undefined ? `${latency} ms` : autoLatency ? 'Auto' : 'Not set'}
           onPress={() => router.push('/calibrate')}
         />
       </Card>
@@ -108,7 +120,79 @@ export default function Settings() {
   );
 }
 
+const PHONE_MIC: Mic = { id: MIC_BUILTIN, name: "Phone's microphone", kind: 'builtin' };
+
+/**
+ * Which microphone records the test. The phone's own mic is the default and the
+ * recommended choice: with headphones on, it hears the pad but not the click.
+ * On Android the system decides, so this explains what it will use instead.
+ */
+function MicPicker({
+  mics,
+  value,
+  savedName,
+  onChange,
+}: {
+  mics: Mic[];
+  value: string;
+  savedName?: string;
+  onChange: (m: Mic) => void;
+}) {
+  if (!canChooseMic) {
+    const headset = mics.some((m) => m.kind === 'headset');
+    return (
+      <>
+        <Body>
+          Android chooses the microphone: the phone&apos;s own mic, also with Bluetooth headphones. Headphones without a mic work the
+          same way.
+        </Body>
+        {headset && (
+          <Text style={styles.warn}>
+            A wired headset with a mic is plugged in, so Android will record from it instead of the phone. Use headphones without a mic,
+            or Bluetooth headphones, for the best results.
+          </Text>
+        )}
+      </>
+    );
+  }
+  const others = mics.filter((m) => m.kind !== 'builtin');
+  const missing = value !== MIC_BUILTIN && !others.some((m) => m.id === value);
+  const options: { mic: Mic; note?: string; disabled?: boolean }[] = [
+    { mic: PHONE_MIC, note: missing ? 'In use: your chosen mic isn\'t connected' : 'Recommended' },
+    ...others.map((mic) => ({ mic, note: mic.kind === 'headset' ? 'Headset mic: hears your voice more than the pad' : undefined })),
+    ...(missing ? [{ mic: { id: value, name: savedName ?? 'Chosen mic', kind: 'other' as const }, note: 'Not connected', disabled: true }] : []),
+  ];
+  return (
+    <View>
+      {options.map(({ mic, note, disabled }) => {
+        const selected = mic.id === value;
+        return (
+          <Pressable
+            key={mic.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected, disabled }}
+            disabled={disabled}
+            onPress={() => onChange(mic)}
+            style={[styles.option, disabled && { opacity: 0.5 }]}>
+            <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? colors.primaryBright : colors.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.optionLabel}>{mic.name}</Text>
+              {note && <Text style={styles.optionNote}>{note}</Text>}
+            </View>
+          </Pressable>
+        );
+      })}
+      <Text style={styles.optionNote}>Bluetooth headphones always leave the phone&apos;s mic recording, so their sound stays at full quality.</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
   label: { color: colors.textMuted, fontSize: 13, marginTop: space.xs },
+  route: { color: colors.textMuted, fontSize: 13 },
+  warn: { color: colors.gold, fontSize: 13, lineHeight: 18 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 8 },
+  optionLabel: { color: colors.text, fontSize: 15 },
+  optionNote: { color: colors.textDim, fontSize: 12, marginTop: 1 },
 });

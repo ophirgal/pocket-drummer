@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { now } from '@/audio/clock';
+import { perfNow } from '@/lib/clockSync';
 import { colors, radius } from '@/lib/theme';
 
 /**
@@ -16,7 +16,7 @@ export function TapPad({ onTap, haptics }: { onTap: (t: number) => void; haptics
       accessibilityLabel="Drum pad"
       onStartShouldSetResponder={() => true}
       onResponderGrant={() => {
-        onTap(now());
+        onTap(perfNow());
         setDown(true);
         if (haptics) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       }}

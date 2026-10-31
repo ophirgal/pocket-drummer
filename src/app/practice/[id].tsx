@@ -174,7 +174,7 @@ export default function Practice() {
           </View>
           <Text style={styles.hint}>
             {settings.inputMode === 'mic'
-              ? 'Mic mode: put your phone near the pad. Headphones keep the click out of the recording.'
+              ? "Mic mode: wear headphones so the click stays out of the recording, and put the phone near the pad: its own mic does the listening."
               : 'Tap mode: tap the pattern on the screen. Switch to the microphone in Settings.'}
           </Text>
         </View>

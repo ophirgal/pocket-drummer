@@ -2,8 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { TickClock } from '@/audio/clock';
-import { initSounds, play } from '@/audio/sounds';
+import { getEngine, type Engine } from '@/audio/engine';
+import { Metronome } from '@/audio/metronome';
 import { Badge, Body, Button, Card, Chip, Screen, Tabs } from '@/components/ui';
 import { EXERCISES, type Category, type Exercise } from '@/lib/exercises';
 import { colors, radius, space } from '@/lib/theme';
@@ -22,9 +22,15 @@ export default function Library() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('All');
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const clock = useRef(new TickClock());
+  const metronome = useRef<Metronome | null>(null);
+  const engine = useRef<Engine | null>(null);
 
-  useEffect(() => () => clock.current.stop(), []);
+  const stopPreview = () => {
+    metronome.current?.stop();
+    engine.current?.stopAll();
+  };
+
+  useEffect(() => () => stopPreview(), []);
 
   const list = EXERCISES.filter(
     (e) => (filter === 'All' || e.category === filter) && e.name.toLowerCase().includes(query.trim().toLowerCase()),
@@ -34,23 +40,28 @@ export default function Library() {
 
   /** Play two bars of the pattern on the pad sound over a quiet click. */
   const preview = async (e: Exercise) => {
+    stopPreview();
     if (previewing === e.id) {
-      clock.current.stop();
       setPreviewing(null);
       return;
     }
-    await initSounds();
+    let eng: Engine;
+    try {
+      eng = engine.current = await getEngine();
+    } catch {
+      return;
+    }
+    metronome.current ??= new Metronome(eng);
     setPreviewing(e.id);
-    const stepMs = 60000 / e.defaultBpm / e.stepsPerBeat;
-    const steps = e.bar.length * 2;
-    clock.current.begin({
-      intervalMs: stepMs,
-      totalTicks: steps,
-      onTick: ({ index }) => {
+    metronome.current.start({
+      startMs: eng.nowMs() + 100,
+      intervalMs: 60000 / e.defaultBpm / e.stepsPerBeat,
+      totalTicks: e.bar.length * 2,
+      onSchedule: (index, whenMs) => {
         const s = index % e.bar.length;
-        if (s % e.stepsPerBeat === 0) play(s === 0 ? 'accent' : 'click', 0.35);
+        if (s % e.stepsPerBeat === 0) eng.play(s === 0 ? 'accent' : 'click', whenMs / 1000, 0.35);
         const note = e.bar[s];
-        if (note) play('pad', note.accent ? 1 : 0.6);
+        if (note) eng.play('pad', whenMs / 1000, note.accent ? 1 : 0.6);
       },
       onDone: () => setPreviewing(null),
     });

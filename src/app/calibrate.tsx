@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useAudioDevices } from '@/audio/devices';
 import { useTestSession } from '@/audio/useTestSession';
 import { KeepAwake } from '@/components/KeepAwake';
 import { TapPad } from '@/components/TapPad';
@@ -30,12 +31,16 @@ const QUARTERS: Exercise = {
 
 /**
  * Measures the delay between the click you hear and the hit the app registers.
- * You play along with the click; the median offset becomes the correction.
+ * You play along with the click; the median offset becomes the correction. It's
+ * saved for the current audio output (speaker, wired, each Bluetooth headset),
+ * since each one has its own delay.
  */
 export default function Calibrate() {
   const { settings, updateSettings } = useStore();
   const mode = settings.inputMode;
   const [message, setMessage] = useState<string | null>(null);
+  const { route } = useAudioDevices();
+  const saved = settings.latency[mode];
 
   const session = useTestSession((r) => {
     const raw = r.offsets.filter((o): o is number => o !== null).map((o) => o + r.latencyMs);
@@ -44,8 +49,11 @@ export default function Calibrate() {
       return;
     }
     const value = Math.round(Math.max(0, median(raw)));
-    updateSettings({ latency: { ...settings.latency, [mode]: value } });
-    setMessage(`Done: ${value} ms will be subtracted from your hits in ${mode === 'mic' ? 'microphone' : 'tap'} mode.`);
+    const key = r.route?.key ?? 'unknown';
+    updateSettings({ latency: { ...settings.latency, [mode]: { ...saved, [key]: value } } });
+    setMessage(
+      `Done: ${value} ms will be subtracted from your hits in ${mode === 'mic' ? 'microphone' : 'tap'} mode with ${r.route?.label ?? 'this output'}.`,
+    );
   });
 
   const running = session.phase !== 'idle';
@@ -53,12 +61,12 @@ export default function Calibrate() {
     setMessage(null);
     session.start(QUARTERS, BPM, {
       ...settings,
-      latency: { mic: null, tap: null },
+      latency: { mic: {}, tap: {} },
       durationSec: (BARS * 4 * 60) / BPM,
     });
   };
 
-  const current = settings.latency[mode];
+  const current = route ? saved[route.key] : undefined;
 
   return (
     <Screen>
@@ -72,8 +80,8 @@ export default function Calibrate() {
         </Body>
         {mode === 'mic' && (
           <Body>
-            If the click plays through the phone speaker, Pocket Pro measures this automatically during the count-in. Calibrate when you practise
-            with headphones.
+            If the click plays through the phone speaker, Pocket Pro measures this automatically during the count-in. With headphones it can&apos;t
+            hear the click, so calibrate once for each pair you practise with.
           </Body>
         )}
         <Body>
@@ -81,7 +89,8 @@ export default function Calibrate() {
           practise with.
         </Body>
         <Text style={styles.value}>
-          Current {mode === 'mic' ? 'microphone' : 'tap'} correction: {current === null ? 'not set' : `${current} ms`}
+          {route ? `${route.label}: ` : ''}
+          {mode === 'mic' ? 'microphone' : 'tap'} correction {current === undefined ? 'not set' : `${current} ms`}
         </Text>
       </Card>
 
@@ -96,11 +105,14 @@ export default function Calibrate() {
       ) : (
         <View style={{ gap: space.sm }}>
           <Button title="Start calibration" onPress={start} />
-          {current !== null && (
+          {route && current !== undefined && (
             <Button
-              title="Reset to automatic"
+              title="Reset"
               variant="ghost"
-              onPress={() => updateSettings({ latency: { ...settings.latency, [mode]: null } })}
+              onPress={() => {
+                const { [route.key]: _, ...rest } = saved;
+                updateSettings({ latency: { ...settings.latency, [mode]: rest } });
+              }}
             />
           )}
         </View>

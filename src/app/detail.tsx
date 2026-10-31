@@ -1,35 +1,32 @@
 import { Redirect, router } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { GridWaveform } from '@/components/GridWaveform';
 import { HitTimeline } from '@/components/HitTimeline';
 import { Notation } from '@/components/Notation';
-import { Waveform } from '@/components/Waveform';
 import { Body, Card, Header, Screen, SliderRow, Stat } from '@/components/ui';
-import { classify, playedTempo } from '@/lib/analysis';
+import { playedTempo } from '@/lib/analysis';
+import { decodeRecording } from '@/lib/recording';
 import { analysisOf, formatDuration } from '@/lib/session';
-import { classColor, colors, space } from '@/lib/theme';
+import { colors, space } from '@/lib/theme';
 import { useStore } from '@/state/store';
 
 /**
  * The in-depth view of the `current` session: per-note average offsets on the
- * notation, every hit on a timeline, the recording's waveform with hits coloured
- * by class, summary stats, and a pocket-width slider that rescores live.
+ * notation, the recording laid over the beat grid with every intended note and
+ * detected hit, each hit's offset on a timeline, summary stats, and a
+ * pocket-width slider that rescores live.
  */
 export default function Detail() {
   const { current, settings, updateSettings } = useStore();
   const { width } = useWindowDimensions();
   const built = useMemo(() => (current ? analysisOf(current, settings.pocketMs) : null), [current, settings.pocketMs]);
+  const stored = current?.recording;
+  const recording = useMemo(() => (stored ? decodeRecording(stored) : null), [stored]);
   if (!current || !built) return <Redirect href="/" />;
   const { analysis, exercise } = built;
   const inner = Math.min(width, 520) - space.md * 4;
   const tempo = playedTempo(analysis, current.bpm);
-
-  // Colour each waveform hit by the class of the note it matched, in order.
-  const played = analysis.notes.filter((n) => n.offset !== null);
-  const marks = current.hitMarks.map((x, i) => ({
-    x,
-    color: played[i] ? classColor[classify(played[i].offset!, settings.pocketMs)] : colors.textDim,
-  }));
 
   return (
     <Screen>
@@ -50,17 +47,26 @@ export default function Detail() {
       </Card>
 
       <Card>
+        <Text style={styles.section}>Your playing on the grid</Text>
+        <GridWaveform
+          exercise={exercise}
+          bpm={current.bpm}
+          notes={analysis.notes}
+          hits={current.hits}
+          recording={recording}
+          pocketMs={settings.pocketMs}
+          width={inner}
+        />
+        <Text style={styles.caption}>
+          Dots are the notes you were meant to play, numbered by bar; lines below are your hits in the recording. Shaded bands are the
+          pocket. Scroll sideways to see the whole test.
+        </Text>
+      </Card>
+
+      <Card>
         <Text style={styles.section}>Every hit</Text>
         <HitTimeline notes={analysis.notes} pocketMs={settings.pocketMs} width={inner} />
-        <Text style={styles.caption}>Above the line is late, below is early. Scroll sideways to see the whole test.</Text>
-        <Waveform values={current.waveform} width={inner} height={56} marks={marks} />
-        <View style={styles.axis}>
-          {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-            <Text key={f} style={styles.tick}>
-              {clock(current.durationSec * f)}
-            </Text>
-          ))}
-        </View>
+        <Text style={styles.caption}>Above the line is late, below is early.</Text>
       </Card>
 
       <Card>
@@ -93,7 +99,6 @@ export default function Detail() {
   );
 }
 
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const fmtMs = (v: number | null) => (v === null ? '–' : `${v > 0 ? '+' : ''}${Math.round(v)} ms`);
 
 function Legend({ color, label, square }: { color: string; label: string; square?: boolean }) {
@@ -112,6 +117,4 @@ const styles = StyleSheet.create({
   legendText: { color: colors.textMuted, fontSize: 12 },
   caption: { color: colors.textDim, fontSize: 11 },
   section: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  axis: { flexDirection: 'row', justifyContent: 'space-between' },
-  tick: { color: colors.textDim, fontSize: 10 },
 });
