@@ -6,16 +6,19 @@ import { Metronome } from './metronome';
 /**
  * Plays two bars of an exercise's pattern on the pad sound over a quiet click,
  * so you can hear it before playing it. `previewing` is the id of the exercise
- * playing, or null. Toggling the one that's playing stops it.
+ * playing, or null. Toggling the one that's playing stops it, and setBpm()
+ * changes the tempo of a preview that's playing, from its next note on.
  */
 export function usePatternPreview() {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const engine = useRef<Engine | null>(null);
   const metronome = useRef<Metronome | null>(null);
+  const playing = useRef<Exercise | null>(null);
 
   const stop = useCallback(() => {
     metronome.current?.stop();
     engine.current?.stopAll();
+    playing.current = null;
     setPreviewing(null);
   }, []);
 
@@ -29,6 +32,7 @@ export function usePatternPreview() {
         return;
       }
       metronome.current ??= new Metronome(eng);
+      playing.current = e;
       setPreviewing(e.id);
       metronome.current.start({
         startMs: eng.nowMs() + 100,
@@ -40,7 +44,10 @@ export function usePatternPreview() {
           const note = e.bar[s];
           if (note) eng.play('pad', whenMs / 1000, note.accent ? 1 : 0.6);
         },
-        onDone: () => setPreviewing(null),
+        onDone: () => {
+          playing.current = null;
+          setPreviewing(null);
+        },
       });
     },
     [stop],
@@ -51,6 +58,11 @@ export function usePatternPreview() {
     [previewing, stop, play],
   );
 
+  const setBpm = useCallback((bpm: number) => {
+    const e = playing.current;
+    if (e) metronome.current?.setIntervalMs(60000 / bpm / e.stepsPerBeat);
+  }, []);
+
   useEffect(
     () => () => {
       metronome.current?.stop();
@@ -59,5 +71,5 @@ export function usePatternPreview() {
     [],
   );
 
-  return { previewing, toggle, stop };
+  return { previewing, toggle, stop, setBpm };
 }

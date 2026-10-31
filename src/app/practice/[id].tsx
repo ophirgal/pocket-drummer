@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { usePatternPreview } from '@/audio/usePatternPreview';
 import { useTestSession } from '@/audio/useTestSession';
@@ -46,6 +46,9 @@ export default function Practice() {
     router.replace('/result');
   });
   const preview = usePatternPreview();
+  // A preview that's playing follows the tempo as it's changed.
+  const setPreviewBpm = preview.setBpm;
+  useEffect(() => setPreviewBpm(bpm), [setPreviewBpm, bpm]);
 
   if (!exercise) {
     return (

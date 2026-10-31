@@ -28,6 +28,12 @@ export interface MetronomeOptions {
 export class Metronome {
   private timer: ReturnType<typeof setInterval> | null = null;
   private uiTimers = new Set<ReturnType<typeof setTimeout>>();
+  // Tick i sounds at anchorMs + (i - anchorIndex) * intervalMs. Changing the tempo
+  // moves the anchor to the next unqueued tick, so the rhythm carries on without a jump.
+  private next = 0;
+  private anchorIndex = 0;
+  private anchorMs = 0;
+  private intervalMs = 0;
 
   constructor(private engine: Engine) {}
 
@@ -35,9 +41,16 @@ export class Metronome {
     return this.timer !== null;
   }
 
+  private timeOf(index: number): number {
+    return this.anchorMs + (index - this.anchorIndex) * this.intervalMs;
+  }
+
   start(opts: MetronomeOptions): void {
     this.stop();
-    let next = 0;
+    this.next = 0;
+    this.anchorIndex = 0;
+    this.anchorMs = opts.startMs;
+    this.intervalMs = opts.intervalMs;
     const later = (fn: () => void, atMs: number) => {
       const id = setTimeout(() => {
         this.uiTimers.delete(id);
@@ -47,20 +60,32 @@ export class Metronome {
     };
     const pump = () => {
       const horizon = this.engine.nowMs() + LOOKAHEAD_MS;
-      while (opts.totalTicks === undefined || next < opts.totalTicks) {
-        const when = opts.startMs + next * opts.intervalMs;
+      while (opts.totalTicks === undefined || this.next < opts.totalTicks) {
+        const when = this.timeOf(this.next);
         if (when > horizon) return;
-        const index = next++;
+        const index = this.next++;
         opts.onSchedule(index, when);
         if (opts.onTick) later(() => opts.onTick!(index), when);
       }
       // All ticks are queued: stop waking up and finish one interval after the last.
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
-      later(() => opts.onDone?.(), opts.startMs + next * opts.intervalMs);
+      later(() => opts.onDone?.(), this.timeOf(this.next));
     };
     this.timer = setInterval(pump, WAKE_MS);
     pump();
+  }
+
+  /**
+   * Change the tempo while running. Ticks already queued (up to LOOKAHEAD_MS
+   * ahead) keep their time; from the next one on, ticks follow the new spacing,
+   * starting one new interval after the last queued tick.
+   */
+  setIntervalMs(intervalMs: number): void {
+    if (!this.running || intervalMs === this.intervalMs) return;
+    if (this.next > 0) this.anchorMs = this.timeOf(this.next - 1) + intervalMs;
+    this.anchorIndex = this.next;
+    this.intervalMs = intervalMs;
   }
 
   /** Stop queuing ticks and cancel pending UI callbacks. Sounds already queued keep playing unless the engine stops them. */
