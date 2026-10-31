@@ -1,27 +1,20 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { colors } from '@/lib/theme';
 
 /**
  * The tempo dial from the recording screen: an arc showing tempo within the
- * exercise's range, the BPM, and a play button that pulses on each beat.
+ * exercise's range, and the BPM.
  */
 export function BpmDial({
   bpm,
   min,
   max,
-  pulse,
-  running,
-  onPress,
   size = 190,
 }: {
   bpm: number;
   min: number;
   max: number;
-  pulse: boolean;
-  running: boolean;
-  onPress?: () => void;
   size?: number;
 }) {
   const stroke = 8;
@@ -64,13 +57,6 @@ export function BpmDial({
       <View style={[StyleSheet.absoluteFill, styles.center]}>
         <Text style={styles.bpm}>{bpm}</Text>
         <Text style={styles.label}>BPM</Text>
-        <Pressable
-          onPress={onPress}
-          disabled={!onPress}
-          accessibilityLabel={running ? 'Beat' : 'Start'}
-          style={[styles.play, pulse && styles.playPulse]}>
-          <Ionicons name={running ? 'radio-button-on' : 'play'} size={20} color={colors.teal} />
-        </Pressable>
       </View>
     </View>
   );
@@ -80,16 +66,4 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   bpm: { color: colors.text, fontSize: 44, fontWeight: '700', fontVariant: ['tabular-nums'] },
   label: { color: colors.textMuted, fontSize: 13, letterSpacing: 1, marginTop: -4 },
-  play: {
-    marginTop: 10,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.cardRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  playPulse: { backgroundColor: colors.primaryDeep, borderColor: colors.teal, transform: [{ scale: 1.12 }] },
 });

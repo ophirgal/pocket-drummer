@@ -1,9 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { getEngine, type Engine } from '@/audio/engine';
-import { Metronome } from '@/audio/metronome';
+import { usePatternPreview } from '@/audio/usePatternPreview';
 import { Badge, Body, Button, Card, Chip, Screen, Tabs } from '@/components/ui';
 import { EXERCISES, type Category, type Exercise } from '@/lib/exercises';
 import { colors, radius, space } from '@/lib/theme';
@@ -21,51 +20,13 @@ export default function Library() {
   const [tab, setTab] = useState<'library' | 'mine'>('library');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('All');
-  const [previewing, setPreviewing] = useState<string | null>(null);
-  const metronome = useRef<Metronome | null>(null);
-  const engine = useRef<Engine | null>(null);
-
-  const stopPreview = () => {
-    metronome.current?.stop();
-    engine.current?.stopAll();
-  };
-
-  useEffect(() => () => stopPreview(), []);
+  const { previewing, toggle: preview } = usePatternPreview();
 
   const list = EXERCISES.filter(
     (e) => (filter === 'All' || e.category === filter) && e.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
 
   const locked = (e: Exercise) => !e.free && !profile.premium;
-
-  /** Play two bars of the pattern on the pad sound over a quiet click. */
-  const preview = async (e: Exercise) => {
-    stopPreview();
-    if (previewing === e.id) {
-      setPreviewing(null);
-      return;
-    }
-    let eng: Engine;
-    try {
-      eng = engine.current = await getEngine();
-    } catch {
-      return;
-    }
-    metronome.current ??= new Metronome(eng);
-    setPreviewing(e.id);
-    metronome.current.start({
-      startMs: eng.nowMs() + 100,
-      intervalMs: 60000 / e.defaultBpm / e.stepsPerBeat,
-      totalTicks: e.bar.length * 2,
-      onSchedule: (index, whenMs) => {
-        const s = index % e.bar.length;
-        if (s % e.stepsPerBeat === 0) eng.play(s === 0 ? 'accent' : 'click', whenMs / 1000, 0.35);
-        const note = e.bar[s];
-        if (note) eng.play('pad', whenMs / 1000, note.accent ? 1 : 0.6);
-      },
-      onDone: () => setPreviewing(null),
-    });
-  };
 
   const open = (e: Exercise) => {
     if (locked(e)) router.push('/premium');

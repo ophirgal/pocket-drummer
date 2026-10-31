@@ -2,12 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { usePatternPreview } from '@/audio/usePatternPreview';
 import { useTestSession } from '@/audio/useTestSession';
 import { BpmDial } from '@/components/BpmDial';
 import { KeepAwake } from '@/components/KeepAwake';
 import { LiveNotation } from '@/components/LiveNotation';
 import { TapPad } from '@/components/TapPad';
-import { Body, Button, Card, Chip, Header, IconButton, Screen } from '@/components/ui';
+import { Body, Button, Card, Chip, Header, IconButton, Screen, type IconName } from '@/components/ui';
 import { exerciseById, subdivisionLabel } from '@/lib/exercises';
 import { formatDuration } from '@/lib/session';
 import { colors, space } from '@/lib/theme';
@@ -41,6 +42,7 @@ export default function Practice() {
     setCurrent(result);
     router.replace('/result');
   });
+  const preview = usePatternPreview();
 
   if (!exercise) {
     return (
@@ -57,6 +59,7 @@ export default function Practice() {
   const contentW = Math.min(width, 520) - space.md * 2;
 
   const start = () => {
+    preview.stop();
     if (testsLeft <= 0) {
       router.push('/premium');
       return;
@@ -77,7 +80,7 @@ export default function Practice() {
 
   const nudge = (d: number) => setBpm((b) => Math.min(exercise.bpmRange[1], Math.max(exercise.bpmRange[0], b + d)));
 
-  let status = 'Press play. You get one bar of count-in: listen, then start playing on beat one.';
+  let status = 'Press Start. You get one bar of count-in: listen, then start playing on beat one. Tap Preview to hear the pattern first.';
   if (session.phase === 'preparing') status = settings.inputMode === 'mic' ? 'Starting the microphone…' : 'Get ready…';
   if (session.phase === 'countIn') status = `Listen… ${session.beat + 1}`;
   if (recording) status = 'Recording...';
@@ -106,9 +109,6 @@ export default function Practice() {
           bpm={bpm}
           min={exercise.bpmRange[0]}
           max={exercise.bpmRange[1]}
-          pulse={running && session.beat >= 0 && session.phase !== 'analyzing'}
-          running={running}
-          onPress={running ? undefined : start}
         />
         <IconButton icon="add-circle-outline" label="Faster" size={30} onPress={() => nudge(5)} color={running ? colors.textDim : colors.text} />
       </View>
@@ -166,9 +166,16 @@ export default function Practice() {
           onPress={running ? session.finish : start}
           disabled={session.phase === 'preparing' || session.phase === 'analyzing'}
           style={styles.main}
+          accessibilityRole="button"
           accessibilityLabel={running ? 'Finish' : 'Start'}>
-          <Ionicons name={running ? 'stop' : 'play'} size={32} color={colors.primaryText} />
+          <Text style={styles.mainText}>{running ? 'Stop' : 'Start'}</Text>
         </Pressable>
+        <Control
+          icon={preview.previewing === exercise.id ? 'stop' : 'play'}
+          label="Preview"
+          onPress={() => preview.toggle(exercise, bpm)}
+          disabled={running}
+        />
         <Control icon="close" label="Cancel" onPress={session.cancel} disabled={!running} />
       </View>
 
@@ -190,8 +197,8 @@ export default function Practice() {
   );
 }
 
-/** A round secondary control (Restart / Cancel) beside the main play button. */
-function Control({ icon, label, onPress, disabled }: { icon: 'refresh' | 'close'; label: string; onPress: () => void; disabled?: boolean }) {
+/** A round secondary control (Restart / Preview / Cancel) beside the Start button. */
+function Control({ icon, label, onPress, disabled }: { icon: IconName; label: string; onPress: () => void; disabled?: boolean }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} style={[styles.control, disabled && { opacity: 0.4 }]}>
       <View style={styles.controlCircle}>
@@ -209,9 +216,9 @@ const styles = StyleSheet.create({
   timer: { color: colors.textMuted, fontSize: 15, fontVariant: ['tabular-nums'] },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   main: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: colors.primaryBright,
     alignItems: 'center',
     justifyContent: 'center',
@@ -220,6 +227,7 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 8,
   },
+  mainText: { color: colors.primaryText, fontSize: 22, fontWeight: '800' },
   control: { alignItems: 'center', gap: 6 },
   controlCircle: {
     width: 48,
