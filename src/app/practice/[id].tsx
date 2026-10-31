@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { usePatternPreview } from '@/audio/usePatternPreview';
 import { useTestSession } from '@/audio/useTestSession';
 import { BpmDial } from '@/components/BpmDial';
@@ -13,6 +13,9 @@ import { exerciseById, subdivisionLabel } from '@/lib/exercises';
 import { formatDuration } from '@/lib/session';
 import { colors, space } from '@/lib/theme';
 import { useStore } from '@/state/store';
+
+const MAIN_SIZE = 120;
+const CONTROL_SIZE = 48;
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -161,22 +164,24 @@ export default function Practice() {
       )}
 
       <View style={styles.controls}>
-        <Control icon="refresh" label="Restart" onPress={restart} disabled={!running} />
-        <Pressable
-          onPress={running ? session.finish : start}
-          disabled={session.phase === 'preparing' || session.phase === 'analyzing'}
-          style={styles.main}
-          accessibilityRole="button"
-          accessibilityLabel={running ? 'Finish' : 'Start'}>
-          <Text style={styles.mainText}>{running ? 'Stop' : 'Start'}</Text>
-        </Pressable>
-        <Control
-          icon={preview.previewing === exercise.id ? 'stop' : 'play'}
-          label="Preview"
-          onPress={() => preview.toggle(exercise, bpm)}
-          disabled={running}
-        />
-        <Control icon="close" label="Cancel" onPress={session.cancel} disabled={!running} />
+        <Control icon="refresh" label="Restart" onPress={restart} disabled={!running} style={styles.side} />
+        <View style={styles.mainColumn}>
+          <Pressable
+            onPress={running ? session.finish : start}
+            disabled={session.phase === 'preparing' || session.phase === 'analyzing'}
+            style={styles.main}
+            accessibilityRole="button"
+            accessibilityLabel={running ? 'Finish' : 'Start'}>
+            <Text style={styles.mainText}>{running ? 'Stop' : 'Start'}</Text>
+          </Pressable>
+          <Control
+            icon={preview.previewing === exercise.id ? 'stop' : 'play'}
+            label="Preview"
+            onPress={() => preview.toggle(exercise, bpm)}
+            disabled={running}
+          />
+        </View>
+        <Control icon="close" label="Cancel" onPress={session.cancel} disabled={!running} style={styles.side} />
       </View>
 
       {!running && (
@@ -197,10 +202,22 @@ export default function Practice() {
   );
 }
 
-/** A round secondary control (Restart / Preview / Cancel) beside the Start button. */
-function Control({ icon, label, onPress, disabled }: { icon: IconName; label: string; onPress: () => void; disabled?: boolean }) {
+/** A round secondary control with a caption: Restart and Cancel beside the Start button, Preview under it. */
+function Control({
+  icon,
+  label,
+  onPress,
+  disabled,
+  style,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={[styles.control, disabled && { opacity: 0.4 }]}>
+    <Pressable onPress={onPress} disabled={disabled} style={[styles.control, style, disabled && { opacity: 0.4 }]}>
       <View style={styles.controlCircle}>
         <Ionicons name={icon} size={22} color={colors.text} />
       </View>
@@ -214,11 +231,13 @@ const styles = StyleSheet.create({
   dialRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
   status: { color: colors.textMuted, fontSize: 15, textAlign: 'center', paddingHorizontal: space.md },
   timer: { color: colors.textMuted, fontSize: 15, fontVariant: ['tabular-nums'] },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
+  // Restart and Cancel line up with the middle of the Start button, not of the column under it.
+  controls: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-evenly' },
+  mainColumn: { alignItems: 'center', gap: space.md },
   main: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: MAIN_SIZE,
+    height: MAIN_SIZE,
+    borderRadius: MAIN_SIZE / 2,
     backgroundColor: colors.primaryBright,
     alignItems: 'center',
     justifyContent: 'center',
@@ -227,12 +246,13 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 8,
   },
-  mainText: { color: colors.primaryText, fontSize: 22, fontWeight: '800' },
+  mainText: { color: colors.primaryText, fontSize: 26, fontWeight: '800' },
   control: { alignItems: 'center', gap: 6 },
+  side: { marginTop: (MAIN_SIZE - CONTROL_SIZE) / 2 },
   controlCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_SIZE / 2,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
