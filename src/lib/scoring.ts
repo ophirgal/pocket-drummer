@@ -20,7 +20,7 @@ export const COUNT_IN_BEATS = 4;
  * How far a hit must rise above the count-in level (`factor`), with an absolute
  * minimum (`floor`), per mic sensitivity setting.
  */
-const SENSITIVITY = {
+export const SENSITIVITY = {
   low: { floor: 0.05, factor: 3 },
   medium: { floor: 0.03, factor: 2.2 },
   high: { floor: 0.015, factor: 1.6 },

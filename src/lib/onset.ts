@@ -136,3 +136,44 @@ export function maxIn(env: Float32Array, from: number, to: number): number {
   for (let i = Math.max(0, from); i < Math.min(env.length, to); i++) if (env[i] > m) m = env[i];
   return m;
 }
+
+/**
+ * detectOnsets for audio that's still arriving: each scan() looks only at the
+ * envelope added since the last call, with the same rules (cross the threshold,
+ * re-arm below half of it, refractory period, back up to the attack). Used to
+ * show hits while a test runs; the final score still uses detectOnsets on the
+ * whole recording, where the threshold can take every hit into account.
+ */
+export class LiveOnsets {
+  private next = 1;
+  private last = -Infinity;
+  private armed = true;
+
+  constructor(
+    private readonly hopMs: number,
+    private readonly refractoryMs = 45,
+  ) {}
+
+  /** Envelope indices where new hits start. `threshold` may change between calls. */
+  scan(env: Float32Array, threshold: number): number[] {
+    const refractory = Math.round(this.refractoryMs / this.hopMs);
+    const out: number[] = [];
+    for (; this.next < env.length; this.next++) {
+      const i = this.next;
+      const v = env[i];
+      if (!this.armed) {
+        if (v < threshold * 0.5 && i - this.last > refractory) this.armed = true;
+        else continue;
+      }
+      if (v >= threshold && i - this.last > refractory) {
+        let start = i;
+        const limit = Math.max(1, i - Math.round(8 / this.hopMs));
+        while (start > limit && env[start - 1] > threshold * 0.2) start--;
+        out.push(start);
+        this.last = i;
+        this.armed = false;
+      }
+    }
+    return out;
+  }
+}

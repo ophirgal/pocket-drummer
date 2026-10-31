@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ClockSync } from './clockSync';
 import { EXERCISES } from './exercises';
-import { EnvelopeBuilder, detectOnsets } from './onset';
+import { EnvelopeBuilder, LiveOnsets, detectOnsets } from './onset';
 import { decodeRecording, encodeRecording, levelBetween } from './recording';
 import { COUNT_IN_BEATS, scoreTest, type TakenTest } from './scoring';
 
@@ -44,6 +44,22 @@ test('a dropped recorder buffer leaves a gap instead of shifting later hits', ()
     onsets.map((o) => Math.round(o.index * b.hopMs)),
     [300, 900],
   );
+});
+
+test('live detection while audio streams in finds the same hits as the final pass', () => {
+  const audio = render([200, 450, 700, 760, 1100, 1350].map((at) => ({ at, level: 0.5 })), 1600);
+  const b = new EnvelopeBuilder(SR, 2);
+  const live = new LiveOnsets(b.hopMs);
+  const found: number[] = [];
+  for (let i = 0; i < audio.length; i += 480) {
+    b.push(audio.subarray(i, i + 480), i);
+    found.push(...live.scan(b.envelope, 0.1));
+  }
+  assert.deepEqual(
+    found,
+    detectOnsets(b.envelope, b.hopMs, { threshold: 0.1 }).map((o) => o.index),
+  );
+  assert.equal(found.length, 6);
 });
 
 test('clock sync recovers the stream-to-context mapping from jittery readings', () => {

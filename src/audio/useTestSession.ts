@@ -2,8 +2,8 @@ import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ClockSync, perfNow } from '@/lib/clockSync';
 import type { Exercise } from '@/lib/exercises';
-import { EnvelopeBuilder } from '@/lib/onset';
-import { COUNT_IN_BEATS, scoreTest } from '@/lib/scoring';
+import { EnvelopeBuilder, LiveOnsets } from '@/lib/onset';
+import { COUNT_IN_BEATS, SENSITIVITY, scoreTest } from '@/lib/scoring';
 import type { AudioRoute, SessionResult, Settings } from '@/state/store';
 import { applyMicPreference, currentRoute, requestMicPermission } from './devices';
 import { getEngine, type Engine } from './engine';
@@ -13,7 +13,6 @@ import { createMicCapture, type ChunkListener } from './recorder';
 export type Phase = 'idle' | 'preparing' | 'countIn' | 'recording' | 'analyzing';
 export type TestError = 'mic-denied' | 'no-audio' | 'too-short' | null;
 
-const WAVE_POINTS = 64;
 const UNKNOWN_ROUTE: AudioRoute = { key: 'unknown', label: 'Unknown output', headphones: false };
 
 /** Everything about the test in progress. Kept in a ref so audio callbacks see it without re-renders. */
@@ -32,6 +31,23 @@ interface Run {
   sync: ClockSync;
   route: AudioRoute;
   micName?: string;
+  /** Hits found while the test runs, latency-corrected, on the audio clock. For display only. */
+  liveHits: number[];
+  live: LiveOnsets | null;
+  /** Loudest level heard during the count-in: the live detector's noise floor. */
+  noise: number;
+  /** Calibrated latency for this input and output (0 if none), applied to live hits. */
+  liveLatency: number;
+}
+
+/** A snapshot of the running test for drawing it live. Times are ms on the audio clock. */
+export interface LiveView {
+  /** Time of the first scored beat. */
+  scoredStart: number;
+  barMs: number;
+  /** Now, shifted by the latency so it lines up with the (corrected) hits. */
+  now: number;
+  hits: readonly number[];
 }
 
 /**
@@ -48,7 +64,6 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
   const [error, setError] = useState<TestError>(null);
   const [beat, setBeat] = useState(-1);
   const [elapsed, setElapsed] = useState(0);
-  const [wave, setWave] = useState<number[]>(() => new Array(WAVE_POINTS).fill(0));
   const engine = useRef<Engine | null>(null);
   const metronome = useRef<Metronome | null>(null);
   const capture = useRef(createMicCapture());
@@ -71,8 +86,23 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
     const arrived = perfNow();
     if (!r.env) r.env = new EnvelopeBuilder(sampleRate, r.settings.durationSec + 20);
     r.env.push(samples, Math.round((startMs * sampleRate) / 1000));
-    r.sync.observeStream(startMs + (samples.length / sampleRate) * 1000, arrived);
+    const endMs = startMs + (samples.length / sampleRate) * 1000;
+    r.sync.observeStream(endMs, arrived);
     sampleClock(r);
+    if (r.t0 > 0 && r.sync.hasContext) detectLive(r, r.env, r.sync.streamToContext(endMs));
+  };
+
+  /** Find hits in the audio that just arrived, for the live view. */
+  const detectLive = (r: Run, env: EnvelopeBuilder, latestMs: number) => {
+    r.live ??= new LiveOnsets(env.hopMs);
+    const scoredStart = r.t0 + COUNT_IN_BEATS * r.beatMs;
+    // Like the final scoring, hits must clear the count-in level by a margin.
+    if (latestMs < scoredStart - 80) r.noise = Math.max(r.noise, env.recentPeak(20));
+    const { floor, factor } = SENSITIVITY[r.settings.sensitivity];
+    for (const i of r.live.scan(env.envelope, Math.max(floor, r.noise * factor))) {
+      const t = r.sync.streamToContext(i * env.hopMs) - r.liveLatency;
+      if (t >= scoredStart - r.beatMs / 2) r.liveHits.push(t);
+    }
   };
 
   /** Stop the click, the mic and the UI timer. */
@@ -127,11 +157,25 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
     async (exercise: Exercise, bpm: number, settings: Settings) => {
       setError(null);
       setElapsed(0);
-      setWave(new Array(WAVE_POINTS).fill(0));
       setPhase('preparing');
       const beatMs = 60000 / bpm;
       const bars = Math.max(1, Math.round((settings.durationSec * 1000) / (beatMs * exercise.beatsPerBar)));
-      const r: Run = { exercise, bpm, settings, bars, beatMs, t0: 0, taps: [], env: null, sync: new ClockSync(), route: UNKNOWN_ROUTE };
+      const r: Run = {
+        exercise,
+        bpm,
+        settings,
+        bars,
+        beatMs,
+        t0: 0,
+        taps: [],
+        env: null,
+        sync: new ClockSync(),
+        route: UNKNOWN_ROUTE,
+        liveHits: [],
+        live: null,
+        noise: 0,
+        liveLatency: 0,
+      };
       run.current = r;
       const fail = (e: TestError) => {
         if (run.current !== r) return;
@@ -150,6 +194,7 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
       }
       metronome.current ??= new Metronome(eng);
       r.route = await currentRoute().catch(() => UNKNOWN_ROUTE);
+      r.liveLatency = settings.latency[settings.inputMode][r.route.key] ?? 0;
 
       if (settings.inputMode === 'mic') {
         if (!(await requestMicPermission().catch(() => false))) return fail('mic-denied');
@@ -191,8 +236,6 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
         if (run.current !== r) return;
         sampleClock(r);
         setElapsed(Math.max(0, (eng.nowMs() - scoredStart) / 1000));
-        const level = r.env ? r.env.recentPeak(80) : 0;
-        setWave((w) => [...w.slice(1), level]);
       }, 80);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,10 +254,23 @@ export function useTestSession(onComplete: (r: SessionResult) => void) {
     const r = run.current;
     if (!r || r.settings.inputMode !== 'tap') return false;
     r.taps.push(time);
-    setWave((w) => [...w.slice(1), 1]);
+    if (r.sync.hasContext) r.liveHits.push(r.sync.perfToContext(time) - r.liveLatency);
     return true;
   }, []);
 
-  // phase/error/beat/elapsed/wave drive the UI; start/finish/cancel/tap control the test.
-  return { phase, error, beat, elapsed, wave, start, finish, cancel, tap, clearError: () => setError(null) };
+  /** The running test for the live view, or null before the click starts and after it ends. */
+  const getLive = useCallback((): LiveView | null => {
+    const r = run.current;
+    const eng = engine.current;
+    if (!r || !eng || !r.t0) return null;
+    return {
+      scoredStart: r.t0 + COUNT_IN_BEATS * r.beatMs,
+      barMs: r.beatMs * r.exercise.beatsPerBar,
+      now: eng.nowMs() - r.liveLatency,
+      hits: r.liveHits,
+    };
+  }, []);
+
+  // phase/error/beat/elapsed and getLive drive the UI; start/finish/cancel/tap control the test.
+  return { phase, error, beat, elapsed, getLive, start, finish, cancel, tap, clearError: () => setError(null) };
 }

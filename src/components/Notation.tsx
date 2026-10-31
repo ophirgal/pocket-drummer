@@ -8,6 +8,23 @@ const T = 16; // top padding above the staff (room for accents)
 const LINE_GAP = 10;
 const NOTE_Y = T + 20 + LINE_GAP * 1.5; // third space from the bottom: the snare/pad position
 const STEM_TOP = NOTE_Y - 30;
+const LEFT = 34;
+const RIGHT = 10;
+
+/** Height of the notation without per-note offsets. */
+export const NOTATION_HEIGHT = 108;
+/** Vertical span of the staff, for drawing over it. */
+export const STAFF_TOP = T + 20;
+export const STAFF_BOTTOM = T + 60;
+
+/**
+ * x position of a (fractional) step of the bar. Notes are centred on their step,
+ * so step s is drawn at s + 0.5 step widths from the left margin, and a moment in
+ * time `t` ms into the bar is at step t / stepMs.
+ */
+export function notationX(exercise: Exercise, width: number, step: number): number {
+  return LEFT + (step + 0.5) * ((width - LEFT - RIGHT) / exercise.bar.length);
+}
 
 /**
  * One bar of the exercise in drum notation, with sticking underneath. When
@@ -25,13 +42,10 @@ export function Notation({
   stepMean?: (number | null)[];
   pocketMs?: number;
 }) {
-  const left = 34;
-  const right = 10;
   const beats = exercise.beatsPerBar;
   const spb = exercise.stepsPerBeat;
-  const groupW = (width - left - right) / beats;
-  const xOf = (step: number) => left + Math.floor(step / spb) * groupW + ((step % spb) + 0.5) * (groupW / spb);
-  const height = stepMean ? 122 : 108;
+  const xOf = (step: number) => notationX(exercise, width, step);
+  const height = stepMean ? 122 : NOTATION_HEIGHT;
 
   const colorOf = (step: number) => {
     if (!stepMean) return colors.text;

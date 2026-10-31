@@ -5,9 +5,8 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import { useTestSession } from '@/audio/useTestSession';
 import { BpmDial } from '@/components/BpmDial';
 import { KeepAwake } from '@/components/KeepAwake';
-import { Notation } from '@/components/Notation';
+import { LiveNotation } from '@/components/LiveNotation';
 import { TapPad } from '@/components/TapPad';
-import { Waveform } from '@/components/Waveform';
 import { Body, Button, Card, Chip, Header, IconButton, Screen } from '@/components/ui';
 import { exerciseById, subdivisionLabel } from '@/lib/exercises';
 import { formatDuration } from '@/lib/session';
@@ -22,9 +21,10 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).p
  * useTestSession runs the count-in, click and listening. When the test ends the
  * result is stored as `current` and the app moves on to the Result screen.
  *
- * While idle it shows the notation; while running it shows a live waveform (mic
- * mode) or a tap pad (tap mode). Starting a test is blocked when the free daily
- * quota is used up.
+ * The notation stays on screen throughout. While the test runs, a playhead
+ * sweeps through each bar and every hit appears on the notation as it lands
+ * (LiveNotation); in tap mode the tap pad shows underneath. Starting a test is
+ * blocked when the free daily quota is used up.
  */
 export default function Practice() {
   const { id, minutes } = useLocalSearchParams<{ id: string; minutes?: string }>();
@@ -107,15 +107,16 @@ export default function Practice() {
         <IconButton icon="add-circle-outline" label="Faster" size={30} onPress={() => nudge(5)} color={running ? colors.textDim : colors.text} />
       </View>
 
-      {running && settings.inputMode === 'tap' ? (
-        <TapPad onTap={session.tap} haptics={settings.haptics} />
-      ) : running ? (
-        <Waveform values={session.wave} width={contentW} height={100} gain={3} />
-      ) : (
-        <Card style={{ alignItems: 'center' }}>
-          <Notation exercise={exercise} width={contentW - space.md * 2} />
-        </Card>
-      )}
+      <Card style={{ alignItems: 'center' }}>
+        <LiveNotation
+          exercise={exercise}
+          width={contentW - space.md * 2}
+          pocketMs={settings.pocketMs}
+          active={running}
+          getLive={session.getLive}
+        />
+      </Card>
+      {running && settings.inputMode === 'tap' && <TapPad onTap={session.tap} haptics={settings.haptics} />}
 
       <View style={{ alignItems: 'center', gap: 4 }}>
         <Text style={[styles.status, recording && { color: colors.text }]}>{status}</Text>
@@ -168,7 +169,7 @@ export default function Practice() {
       {!running && (
         <View style={{ gap: space.sm }}>
           <View style={styles.chips}>
-            {[30, 60, 120].map((s) => (
+            {[10, 30, 60, 120].map((s) => (
               <Chip key={s} label={formatDuration(s)} active={durationSec === s} onPress={() => setDurationSec(s)} />
             ))}
           </View>
