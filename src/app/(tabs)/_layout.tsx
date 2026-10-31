@@ -6,7 +6,7 @@ import { colors } from '@/lib/theme';
 import { useStore } from '@/state/store';
 
 function TabIcon({ name, active, color, focused }: { name: IconName; active: IconName; color: ColorValue; focused: boolean }) {
-  return <Ionicons name={focused ? active : name} size={22} color={color} />;
+  return <Ionicons name={focused ? active : name} size={22} color={typeof color === 'string' ? color : undefined} />;
 }
 
 function icon(name: IconName, active: IconName) {
