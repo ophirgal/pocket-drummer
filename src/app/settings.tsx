@@ -18,18 +18,6 @@ export default function Settings() {
   const latency = route ? settings.latency[settings.inputMode][route.key] : undefined;
   const autoLatency = settings.inputMode === 'mic' && route !== null && !route.headphones;
 
-  const confirmReset = () => {
-    const msg = 'Put every setting back to its default? Your latency calibrations are kept.';
-    if (Platform.OS === 'web') {
-      if (window.confirm(msg)) resetSettings();
-      return;
-    }
-    Alert.alert('Reset to defaults?', msg, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: resetSettings },
-    ]);
-  };
-
   const confirmClear = () => {
     if (Platform.OS === 'web') {
       if (window.confirm('Delete all saved sessions on this device?')) clearSessions();
@@ -128,7 +116,7 @@ export default function Settings() {
         <ToggleRow label="Haptic Feedback" value={settings.haptics} onChange={(v) => updateSettings({ haptics: v })} />
       </Card>
 
-      <Button title="Reset to Defaults" variant="secondary" onPress={confirmReset} />
+      <Button title="Reset to Defaults" variant="secondary" onPress={resetSettings} />
       <Button title="Clear practice history" variant="secondary" onPress={confirmClear} />
     </Screen>
   );

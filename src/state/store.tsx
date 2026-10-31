@@ -127,7 +127,7 @@ interface Store {
   testsToday: number;
   testsLeft: number;
   updateSettings: (patch: Partial<Settings>) => void;
-  /** Back to DEFAULT_SETTINGS, keeping latency calibrations (they're measurements of this device, not preferences). */
+  /** Back to DEFAULT_SETTINGS, including latency (no calibrations, so it's automatic again). */
   resetSettings: () => void;
   updateProfile: (patch: Partial<Profile>) => void;
   setCurrent: (r: SessionResult | null) => void;
@@ -196,11 +196,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetSettings = useCallback(() => {
-    setSettings((prev) => {
-      const next = { ...DEFAULT_SETTINGS, latency: prev.latency };
-      write(KEYS.settings, next);
-      return next;
-    });
+    setSettings(DEFAULT_SETTINGS);
+    write(KEYS.settings, DEFAULT_SETTINGS);
   }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
