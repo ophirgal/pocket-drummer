@@ -79,7 +79,7 @@ export function Notation({
     <Svg width={width} height={height}>
       {/* staff */}
       {[0, 1, 2, 3, 4].map((i) => (
-        <Line key={i} x1={4} x2={width - 4} y1={T + 20 + i * LINE_GAP} y2={T + 20 + i * LINE_GAP} stroke={colors.border} strokeWidth={1} />
+        <Line key={i} x1={4} x2={width - 4} y1={T + 20 + i * LINE_GAP} y2={T + 20 + i * LINE_GAP} stroke={colors.textDim} strokeWidth={1} />
       ))}
       {/* percussion clef */}
       <Rect x={12} y={T + 30} width={4} height={20} fill={colors.text} />
